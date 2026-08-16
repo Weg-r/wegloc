@@ -1,0 +1,50 @@
+export interface Waypoint {
+  id: string
+  lng: number
+  lat: number
+  altitude: number | null
+  /** Overrides the base speed for the leg leading into this waypoint. null = use base speed. */
+  legSpeedMps: number | null
+}
+
+export type AltitudeMode = 'flat' | 'per-waypoint'
+
+export interface SimulationSettings {
+  baseSpeedMps: number
+  altitudeMode: AltitudeMode
+  flatAltitude: number
+  accuracyMeters: number
+  jitterMeters: number
+  loop: boolean
+  tickRateMs: number
+}
+
+export interface Route {
+  id: string
+  name: string
+  waypoints: Waypoint[]
+  settings: SimulationSettings
+  createdAt: number
+  updatedAt: number
+}
+
+export interface TrackPoint {
+  lng: number
+  lat: number
+  altitude: number
+  speedMps: number
+  bearingDeg: number
+  accuracyMeters: number
+  /** Milliseconds elapsed since track start. */
+  t: number
+}
+
+export const DEFAULT_SETTINGS: SimulationSettings = {
+  baseSpeedMps: 1.4,
+  altitudeMode: 'flat',
+  flatAltitude: 0,
+  accuracyMeters: 5,
+  jitterMeters: 0,
+  loop: false,
+  tickRateMs: 200,
+}
