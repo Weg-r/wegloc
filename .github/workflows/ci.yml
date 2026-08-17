@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [Dev, main]
+  pull_request:
+
+# A new push to a branch makes the run already in flight irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: lint / typecheck / test / build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the engines range in package.json, which follows Vite's.
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      # Runs last: it is the slowest step and the least specific about what broke.
+      - name: Build
+        run: npm run build
