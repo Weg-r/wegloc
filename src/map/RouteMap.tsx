@@ -32,10 +32,11 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
   const addWaypoint = useRouteStore((s) => s.addWaypoint)
   const moveWaypoint = useRouteStore((s) => s.moveWaypoint)
   const selectWaypoint = useRouteStore((s) => s.selectWaypoint)
-  const persist = useRouteStore((s) => s.persist)
+  const beginDrag = useRouteStore((s) => s.beginDrag)
+  const endDrag = useRouteStore((s) => s.endDrag)
 
   const styleUrl = import.meta.env.VITE_MAP_STYLE_URL as string
-  const { containerRef, mapRef, ready, error } = useMapLibre({
+  const { containerRef, mapRef, ready, error, warning, dismissWarning } = useMapLibre({
     styleUrl,
     center: route.waypoints[0] ? [route.waypoints[0].lng, route.waypoints[0].lat] : [2.298, 48.858],
     zoom: 15,
@@ -101,6 +102,7 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
       const id = e.features?.[0]?.properties?.id as string | undefined
       if (!id) return
       draggingId.current = id
+      beginDrag(id)
       map.dragPan.disable()
       map.getCanvas().style.cursor = 'grabbing'
     }
@@ -113,7 +115,8 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
       draggingId.current = null
       map.dragPan.enable()
       map.getCanvas().style.cursor = ''
-      persist()
+      // Rebuilds the track and writes the route once, on release.
+      endDrag()
     }
     const handleEnter = () => {
       if (!draggingId.current) map.getCanvas().style.cursor = 'grab'
@@ -149,7 +152,7 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
     // close over the latest store actions, which are referentially stable. Waypoint
     // and marker data are pushed in via setData by the effects below, not here --
     // this effect must not re-run on every waypoint change (e.g. mid-drag).
-  }, [ready, mapRef, addWaypoint, moveWaypoint, selectWaypoint, persist])
+  }, [ready, mapRef, addWaypoint, moveWaypoint, selectWaypoint, beginDrag, endDrag])
 
   useEffect(() => {
     setSourceData(mapRef.current, LINE_SOURCE, waypointsToLine(route.waypoints))
@@ -168,8 +171,25 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
         style={{ filter: 'grayscale(1) contrast(1.05) brightness(1.1)' }}
       />
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/95 px-6 text-center">
-          <p className="text-sm font-mono text-neutral-600 max-w-sm">{error}</p>
+        <div className="absolute inset-0 flex items-center justify-center px-6 pointer-events-none">
+          <div className="pointer-events-auto max-w-sm bg-white border-4 border-neutral-900 px-5 py-4 shadow-lg text-center">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Map unavailable</p>
+            <p className="mt-2 text-sm font-mono text-neutral-700">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {!error && warning && (
+        <div className="absolute bottom-4 left-4 z-10 flex max-w-sm items-start gap-3 bg-neutral-900 px-3 py-2 text-neutral-50 shadow-lg">
+          <p className="font-mono text-xs leading-snug">{warning}</p>
+          <button
+            type="button"
+            onClick={dismissWarning}
+            className="shrink-0 text-xs font-bold text-neutral-400 hover:text-white"
+            aria-label="Dismiss map warning"
+          >
+            &#10005;
+          </button>
         </div>
       )}
     </div>

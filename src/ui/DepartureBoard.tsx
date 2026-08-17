@@ -26,6 +26,12 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
+/**
+ * A leg speed of 0 is not a stop -- it used to make the leg emit no track points
+ * at all. Stops are the dwell field below.
+ */
+const MIN_LEG_SPEED_MPS = 0.1
+
 const inputClass =
   'bg-transparent border-0 border-b-2 border-neutral-700 focus:border-[color:var(--accent)] outline-none font-mono font-bold text-lg text-neutral-50 py-0.5 w-full'
 
@@ -140,10 +146,29 @@ export default function DepartureBoard({
             <input
               type="number"
               step={0.1}
+              min={MIN_LEG_SPEED_MPS}
               value={selected.legSpeedMps ?? ''}
               placeholder="auto"
               onChange={(e) =>
-                onUpdateSelected({ legSpeedMps: e.target.value === '' ? null : Number(e.target.value) })
+                onUpdateSelected({
+                  legSpeedMps:
+                    e.target.value === '' ? null : Math.max(MIN_LEG_SPEED_MPS, Number(e.target.value)),
+                })
+              }
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Stop here (s)">
+            <input
+              type="number"
+              step={1}
+              min={0}
+              value={selected.dwellMs != null ? selected.dwellMs / 1000 : ''}
+              placeholder="0"
+              onChange={(e) =>
+                onUpdateSelected({
+                  dwellMs: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) * 1000,
+                })
               }
               className={inputClass}
             />

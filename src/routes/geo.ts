@@ -72,3 +72,19 @@ export function interpolatePosition(
 
   return { lng: toDeg(lng), lat: toDeg(lat) }
 }
+
+/**
+ * Moves a point by a local east/north offset in meters. Used to apply receiver
+ * noise to a position; accurate for the small offsets that implies, and a no-op
+ * on longitude at the poles where the east direction is undefined.
+ */
+export function offsetMeters(
+  p: { lng: number; lat: number },
+  eastMeters: number,
+  northMeters: number,
+): { lng: number; lat: number } {
+  const dLat = toDeg(northMeters / EARTH_RADIUS_M)
+  const cosLat = Math.cos(toRad(p.lat))
+  const dLng = Math.abs(cosLat) < 1e-9 ? 0 : toDeg(eastMeters / (EARTH_RADIUS_M * cosLat))
+  return { lng: p.lng + dLng, lat: p.lat + dLat }
+}

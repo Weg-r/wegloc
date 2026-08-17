@@ -3,10 +3,28 @@ import { useRouteStore } from './routeStore'
 import { buildTrack, positionAtTime, trackDurationMs } from '../routes/interpolate'
 import type { TrackPoint } from '../types/route'
 
-/** Derives the dense track from the current route. Recomputed only when the route changes. */
+const EMPTY_TRACK: TrackPoint[] = []
+
+/**
+ * Derives the dense track from the current route.
+ *
+ * Held still for the duration of a waypoint drag: `moveWaypoint` produces a new
+ * route on every pointer event, and rebuilding every leg of a dense route dozens
+ * of times a second is what makes the drag feel broken. The map line and the
+ * waypoint circles are fed from the raw waypoints during the gesture, so the only
+ * stale thing is the playback track, which is rebuilt once on release.
+ */
 export function useTrack(): TrackPoint[] {
-  const route = useRouteStore((s) => s.route)
-  return useMemo(() => buildTrack(route), [route])
+  const waypoints = useRouteStore((s) => s.route.waypoints)
+  const settings = useRouteStore((s) => s.route.settings)
+  const dragging = useRouteStore((s) => s.draggingWaypointId !== null)
+  const cached = useRef<TrackPoint[]>(EMPTY_TRACK)
+
+  return useMemo(() => {
+    if (dragging) return cached.current
+    cached.current = buildTrack({ waypoints, settings })
+    return cached.current
+  }, [waypoints, settings, dragging])
 }
 
 /** Interpolated marker position for the current playback time. */

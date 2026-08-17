@@ -28,3 +28,25 @@ export function useHydrateFromDb(): void {
       })
   }, [loadRoute])
 }
+
+/**
+ * Flushes the debounced write when the page goes away. Without this, an edit made
+ * inside the debounce window is lost if the tab is closed straight after -- which
+ * is exactly what someone does after tweaking one setting.
+ */
+export function useFlushPendingWrites(): void {
+  useEffect(() => {
+    const flush = () => useRouteStore.getState().persist()
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [])
+}

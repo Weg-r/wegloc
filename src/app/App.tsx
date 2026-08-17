@@ -1,8 +1,8 @@
-import { useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { useRouteStore } from '../store/routeStore'
 import { useTrack, useCurrentPosition, usePlaybackClock } from '../store/hooks'
 import { trackDurationMs } from '../routes/interpolate'
-import { useHydrateFromDb } from './hydrate'
+import { useFlushPendingWrites, useHydrateFromDb } from './hydrate'
 import RouteMap, { type RouteMapHandle } from '../map/RouteMap'
 import LineCard from '../ui/LineCard'
 import DepartureBoard from '../ui/DepartureBoard'
@@ -10,6 +10,7 @@ import { ACCENT } from '../lib/theme'
 
 export default function App() {
   useHydrateFromDb()
+  useFlushPendingWrites()
 
   const route = useRouteStore((s) => s.route)
   const selectedWaypointId = useRouteStore((s) => s.selectedWaypointId)
@@ -34,6 +35,20 @@ export default function App() {
   const mapHandleRef = useRef<RouteMapHandle>(null)
   const canPlay = route.waypoints.length >= 2 && durationMs > 0
 
+  // Stable identities: the memoized rows in LineCard are only worth anything if
+  // their callback props don't change on every render of the shell. Reading the
+  // waypoints off the store keeps the callback out of the render's closure.
+  const handleSelect = useCallback(
+    (id: string) => {
+      selectWaypoint(id)
+      const wp = useRouteStore.getState().route.waypoints.find((w) => w.id === id)
+      if (wp) mapHandleRef.current?.flyTo(wp.lng, wp.lat)
+    },
+    [selectWaypoint],
+  )
+
+  const handleDeselect = useCallback(() => selectWaypoint(null), [selectWaypoint])
+
   return (
     <div className="h-screen w-screen flex bg-white text-neutral-900 overflow-hidden">
       <div className="flex-1 relative min-w-0">
@@ -57,11 +72,8 @@ export default function App() {
           waypoints={route.waypoints}
           settings={route.settings}
           selectedId={selectedWaypointId}
-          onSelect={(id) => {
-            selectWaypoint(id)
-            const wp = route.waypoints.find((w) => w.id === id)
-            if (wp) mapHandleRef.current?.flyTo(wp.lng, wp.lat)
-          }}
+          onSelect={handleSelect}
+          onDeselect={handleDeselect}
           onDelete={removeWaypoint}
         />
 

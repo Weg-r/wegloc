@@ -12,3 +12,12 @@ export function formatClock(ms: number): string {
 export function stationCode(index: number): string {
   return `WP-${String(index + 1).padStart(2, '0')}`
 }
+
+/** Compact duration for dwell times, which are usually seconds, occasionally minutes. */
+export function formatSeconds(ms: number): string {
+  const seconds = Math.round(ms / 1000)
+  if (seconds < 60) return `${seconds}S`
+  const minutes = Math.floor(seconds / 60)
+  const rest = seconds % 60
+  return rest === 0 ? `${minutes}M` : `${minutes}M ${rest}S`
+}

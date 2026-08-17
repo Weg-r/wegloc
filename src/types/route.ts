@@ -5,6 +5,11 @@ export interface Waypoint {
   altitude: number | null
   /** Overrides the base speed for the leg leading into this waypoint. null = use base speed. */
   legSpeedMps: number | null
+  /**
+   * Time held stationary at this waypoint, in milliseconds. Optional so routes
+   * saved before stops existed read back unchanged. null or absent = no stop.
+   */
+  dwellMs?: number | null
 }
 
 export type AltitudeMode = 'flat' | 'per-waypoint'
