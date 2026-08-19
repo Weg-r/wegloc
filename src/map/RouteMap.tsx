@@ -1,5 +1,11 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
-import type { MapLayerMouseEvent, MapLayerTouchEvent, MapMouseEvent, MapTouchEvent } from 'maplibre-gl'
+import type {
+  MapLayerMouseEvent,
+  MapLayerTouchEvent,
+  MapMouseEvent,
+  MapTouchEvent,
+  PointLike,
+} from 'maplibre-gl'
 import { useRouteStore } from '../store/routeStore'
 import { useMapLibre } from './useMapLibre'
 import { setSourceData, trackPointToFeature, waypointsToLine, waypointsToPoints } from './routeSource'
@@ -30,6 +36,7 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
   const route = useRouteStore((s) => s.route)
   const selectedWaypointId = useRouteStore((s) => s.selectedWaypointId)
   const addWaypoint = useRouteStore((s) => s.addWaypoint)
+  const insertWaypointOnRoute = useRouteStore((s) => s.insertWaypointOnRoute)
   const moveWaypoint = useRouteStore((s) => s.moveWaypoint)
   const selectWaypoint = useRouteStore((s) => s.selectWaypoint)
   const beginDrag = useRouteStore((s) => s.beginDrag)
@@ -91,8 +98,23 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
     }
 
     const handleMapClick = (e: MapMouseEvent) => {
-      const features = map.queryRenderedFeatures(e.point, { layers: [POINTS_LAYER] })
-      if (features.length === 0) addWaypoint(e.lngLat.lng, e.lngLat.lat)
+      // A click on an existing waypoint is a selection, handled below. A click on
+      // the line splits that leg, which is how a waypoint gets inserted into the
+      // middle of a route. Anywhere else appends.
+      if (map.queryRenderedFeatures(e.point, { layers: [POINTS_LAYER] }).length > 0) return
+
+      // A few pixels of slop: the line is 5px wide and a trackpad is not precise.
+      const slop = 6
+      const box: [PointLike, PointLike] = [
+        [e.point.x - slop, e.point.y - slop],
+        [e.point.x + slop, e.point.y + slop],
+      ]
+      if (map.queryRenderedFeatures(box, { layers: [LINE_LAYER] }).length > 0) {
+        insertWaypointOnRoute(e.lngLat.lng, e.lngLat.lat)
+        return
+      }
+
+      addWaypoint(e.lngLat.lng, e.lngLat.lat)
     }
     const handlePointClick = (e: MapLayerMouseEvent) => {
       const id = e.features?.[0]?.properties?.id as string | undefined
@@ -124,6 +146,9 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
     const handleLeave = () => {
       if (!draggingId.current) map.getCanvas().style.cursor = ''
     }
+    const handleLineEnter = () => {
+      if (!draggingId.current) map.getCanvas().style.cursor = 'copy'
+    }
 
     map.on('click', handleMapClick)
     map.on('click', POINTS_LAYER, handlePointClick)
@@ -135,6 +160,8 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
     map.on('touchend', handleDragEnd)
     map.on('mouseenter', POINTS_LAYER, handleEnter)
     map.on('mouseleave', POINTS_LAYER, handleLeave)
+    map.on('mouseenter', LINE_LAYER, handleLineEnter)
+    map.on('mouseleave', LINE_LAYER, handleLeave)
 
     return () => {
       map.off('click', handleMapClick)
@@ -147,12 +174,14 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
       map.off('touchend', handleDragEnd)
       map.off('mouseenter', POINTS_LAYER, handleEnter)
       map.off('mouseleave', POINTS_LAYER, handleLeave)
+      map.off('mouseenter', LINE_LAYER, handleLineEnter)
+      map.off('mouseleave', LINE_LAYER, handleLeave)
     }
     // Sources/layers are created once per map instance (guarded above); handlers
     // close over the latest store actions, which are referentially stable. Waypoint
     // and marker data are pushed in via setData by the effects below, not here --
     // this effect must not re-run on every waypoint change (e.g. mid-drag).
-  }, [ready, mapRef, addWaypoint, moveWaypoint, selectWaypoint, beginDrag, endDrag])
+  }, [ready, mapRef, addWaypoint, insertWaypointOnRoute, moveWaypoint, selectWaypoint, beginDrag, endDrag])
 
   useEffect(() => {
     setSourceData(mapRef.current, LINE_SOURCE, waypointsToLine(route.waypoints))

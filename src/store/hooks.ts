@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useRouteStore } from './routeStore'
 import { buildTrack, positionAtTime, trackDurationMs } from '../routes/interpolate'
-import type { TrackPoint } from '../types/route'
+import type { SimulationSettings, TrackPoint, Waypoint } from '../types/route'
 
-const EMPTY_TRACK: TrackPoint[] = []
+interface TrackCache {
+  waypoints: Waypoint[] | null
+  settings: SimulationSettings | null
+  track: TrackPoint[]
+}
 
 /**
  * Derives the dense track from the current route.
@@ -13,17 +17,23 @@ const EMPTY_TRACK: TrackPoint[] = []
  * of times a second is what makes the drag feel broken. The map line and the
  * waypoint circles are fed from the raw waypoints during the gesture, so the only
  * stale thing is the playback track, which is rebuilt once on release.
+ *
+ * The cache is keyed on the inputs as well, so ending a gesture that changed
+ * nothing -- a click on a waypoint to select it -- costs nothing either.
  */
 export function useTrack(): TrackPoint[] {
   const waypoints = useRouteStore((s) => s.route.waypoints)
   const settings = useRouteStore((s) => s.route.settings)
   const dragging = useRouteStore((s) => s.draggingWaypointId !== null)
-  const cached = useRef<TrackPoint[]>(EMPTY_TRACK)
+  const cache = useRef<TrackCache>({ waypoints: null, settings: null, track: [] })
 
   return useMemo(() => {
-    if (dragging) return cached.current
-    cached.current = buildTrack({ waypoints, settings })
-    return cached.current
+    const cached = cache.current
+    if (dragging) return cached.track
+    if (cached.waypoints === waypoints && cached.settings === settings) return cached.track
+
+    cache.current = { waypoints, settings, track: buildTrack({ waypoints, settings }) }
+    return cache.current.track
   }, [waypoints, settings, dragging])
 }
 

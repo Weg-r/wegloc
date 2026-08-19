@@ -1,0 +1,61 @@
+{
+  "formatVersion": 1,
+  "exportedAt": 1700000500000,
+  "route": {
+    "id": "fixture-champ-de-mars",
+    "name": "Champ de Mars walk",
+    "createdAt": 1700000000000,
+    "updatedAt": 1700000000000,
+    "waypoints": [
+      {
+        "id": "cdm-1",
+        "lng": 2.2945,
+        "lat": 48.8584,
+        "altitude": 33,
+        "legSpeedMps": null,
+        "dwellMs": null
+      },
+      {
+        "id": "cdm-2",
+        "lng": 2.2977,
+        "lat": 48.8557,
+        "altitude": 35,
+        "legSpeedMps": 1.4,
+        "dwellMs": null
+      },
+      {
+        "id": "cdm-3",
+        "lng": 2.3012,
+        "lat": 48.8566,
+        "altitude": 34,
+        "legSpeedMps": 2.8,
+        "dwellMs": null
+      },
+      {
+        "id": "cdm-4",
+        "lng": 2.301,
+        "lat": 48.86,
+        "altitude": 36,
+        "legSpeedMps": 1.4,
+        "dwellMs": null
+      },
+      {
+        "id": "cdm-5",
+        "lng": 2.2965,
+        "lat": 48.8607,
+        "altitude": 34,
+        "legSpeedMps": 1.1,
+        "dwellMs": null
+      }
+    ],
+    "settings": {
+      "baseSpeedMps": 1.4,
+      "altitudeMode": "per-waypoint",
+      "flatAltitude": 0,
+      "accuracyMeters": 5,
+      "jitterMeters": 0,
+      "loop": false,
+      "tickRateMs": 200
+    }
+  }
+}

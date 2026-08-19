@@ -21,3 +21,21 @@ export function formatSeconds(ms: number): string {
   const rest = seconds % 60
   return rest === 0 ? `${minutes}M` : `${minutes}M ${rest}S`
 }
+
+/**
+ * Coarse "how long ago", for a route list where the exact minute never matters.
+ * `now` is passed in rather than read from the clock so this stays pure.
+ */
+export function formatRelativeTime(then: number, now: number): string {
+  const seconds = Math.max(0, Math.round((now - then) / 1000))
+  if (seconds < 60) return 'just now'
+
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+
+  const days = Math.floor(hours / 24)
+  return days < 30 ? `${days}d ago` : `${Math.floor(days / 30)}mo ago`
+}

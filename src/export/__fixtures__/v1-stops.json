@@ -1,0 +1,61 @@
+{
+  "formatVersion": 1,
+  "exportedAt": 1700000500000,
+  "route": {
+    "id": "fixture-stop-in-the-middle",
+    "name": "Drive with a stop",
+    "createdAt": 1700000000000,
+    "updatedAt": 1700000000000,
+    "waypoints": [
+      {
+        "id": "stop-1",
+        "lng": 2.3312,
+        "lat": 48.8709,
+        "altitude": null,
+        "legSpeedMps": null,
+        "dwellMs": null
+      },
+      {
+        "id": "stop-2",
+        "lng": 2.3345,
+        "lat": 48.8712,
+        "altitude": null,
+        "legSpeedMps": 13.9,
+        "dwellMs": null
+      },
+      {
+        "id": "stop-3",
+        "lng": 2.3378,
+        "lat": 48.8716,
+        "altitude": null,
+        "legSpeedMps": 13.9,
+        "dwellMs": 45000
+      },
+      {
+        "id": "stop-4",
+        "lng": 2.3402,
+        "lat": 48.8721,
+        "altitude": null,
+        "legSpeedMps": 4.2,
+        "dwellMs": null
+      },
+      {
+        "id": "stop-5",
+        "lng": 2.3448,
+        "lat": 48.8729,
+        "altitude": null,
+        "legSpeedMps": 13.9,
+        "dwellMs": 15000
+      }
+    ],
+    "settings": {
+      "baseSpeedMps": 13.9,
+      "altitudeMode": "flat",
+      "flatAltitude": 0,
+      "accuracyMeters": 6,
+      "jitterMeters": 4,
+      "loop": false,
+      "tickRateMs": 200
+    }
+  }
+}

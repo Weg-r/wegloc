@@ -11,6 +11,7 @@ interface LineCardProps {
   onSelect: (id: string) => void
   onDeselect: () => void
   onDelete: (id: string) => void
+  onReorder: (from: number, to: number) => void
 }
 
 interface LineRowProps {
@@ -22,8 +23,12 @@ interface LineRowProps {
   selected: boolean
   onSelect: (id: string) => void
   onDelete: (id: string) => void
+  onReorder: (from: number, to: number) => void
   registerRef: (id: string, node: HTMLButtonElement | null) => void
 }
+
+const rowActionClass =
+  'w-7 flex items-center justify-center text-[9px] text-neutral-300 hover:text-neutral-900 disabled:opacity-0 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-neutral-900'
 
 /**
  * One station in the line diagram. Memoized because dragging a waypoint hands
@@ -39,6 +44,7 @@ const LineRow = memo(function LineRow({
   selected,
   onSelect,
   onDelete,
+  onReorder,
   registerRef,
 }: LineRowProps) {
   const code = stationCode(index)
@@ -86,6 +92,27 @@ const LineRow = memo(function LineRow({
         </span>
       </button>
 
+      <span className="shrink-0 flex flex-col justify-start pt-2">
+        <button
+          type="button"
+          onClick={() => onReorder(index, index - 1)}
+          disabled={index === 0}
+          aria-label={`Move ${code} earlier`}
+          className={`${rowActionClass} h-5`}
+        >
+          &#9650;
+        </button>
+        <button
+          type="button"
+          onClick={() => onReorder(index, index + 1)}
+          disabled={index === total - 1}
+          aria-label={`Move ${code} later`}
+          className={`${rowActionClass} h-5`}
+        >
+          &#9660;
+        </button>
+      </span>
+
       <button
         type="button"
         onClick={() => onDelete(waypoint.id)}
@@ -108,6 +135,7 @@ export default function LineCard({
   onSelect,
   onDeselect,
   onDelete,
+  onReorder,
 }: LineCardProps) {
   // Recomputed once per waypoint change rather than once per row per render.
   const legDistances = useMemo(
@@ -138,11 +166,14 @@ export default function LineCard({
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault()
-        selectAt(index < 0 ? 0 : Math.min(index + 1, waypoints.length - 1))
+        // Alt reorders instead of navigating; the selection follows the waypoint.
+        if (event.altKey && index >= 0) onReorder(index, index + 1)
+        else selectAt(index < 0 ? 0 : Math.min(index + 1, waypoints.length - 1))
         break
       case 'ArrowUp':
         event.preventDefault()
-        selectAt(index < 0 ? waypoints.length - 1 : Math.max(index - 1, 0))
+        if (event.altKey && index >= 0) onReorder(index, index - 1)
+        else selectAt(index < 0 ? waypoints.length - 1 : Math.max(index - 1, 0))
         break
       case 'Home':
         event.preventDefault()
@@ -203,6 +234,7 @@ export default function LineCard({
           selected={wp.id === selectedId}
           onSelect={onSelect}
           onDelete={onDelete}
+          onReorder={onReorder}
           registerRef={registerRef}
         />
       ))}
