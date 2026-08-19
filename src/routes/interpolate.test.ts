@@ -175,6 +175,92 @@ describe('buildTrack: jitter', () => {
   })
 })
 
+describe('buildTrack: speed profile', () => {
+  // Two ~360m legs, straight, with a car-like profile.
+  const P = wp({ lng: 0, lat: 0 })
+  const Q = wp({ lng: 0, lat: 0.0032 })
+  const R = wp({ lng: 0, lat: 0.0064 })
+  const profile = { maxAccelMps2: 2, maxDecelMps2: 3, corneringMps2: 2 }
+
+  it('is off by default: a route with no limits is unchanged', () => {
+    const off = buildTrack(route([P, Q, R]))
+    expect(off.every((pt) => pt.speedMps === off[1].speedMps || pt.t === 0)).toBe(true)
+  })
+
+  it('starts and ends at rest when on', () => {
+    const track = buildTrack(route([P, Q, R], profile))
+    expect(track[0].speedMps).toBeCloseTo(0, 3)
+    expect(track.at(-1)?.speedMps).toBeCloseTo(0, 3)
+  })
+
+  it('never implies acceleration above the configured limit', () => {
+    const track = buildTrack(route([P, Q, R], { ...profile, tickRateMs: 100 }))
+    const limit = Math.max(profile.maxAccelMps2, profile.maxDecelMps2)
+    for (let i = 1; i < track.length; i++) {
+      const dt = (track[i].t - track[i - 1].t) / 1000
+      if (dt <= 0) continue
+      const accel = Math.abs(track[i].speedMps - track[i - 1].speedMps) / dt
+      expect(accel).toBeLessThanOrEqual(limit + 0.5)
+    }
+  })
+
+  it('takes longer than the constant-speed track, because of the ramps', () => {
+    const constant = trackDurationMs(buildTrack(route([P, Q, R])))
+    const ramped = trackDurationMs(buildTrack(route([P, Q, R], profile)))
+    expect(ramped).toBeGreaterThan(constant)
+  })
+
+  it('dips speed at a 90-degree turn, and the dip is tunable to off', () => {
+    // Q is an interior 90-degree vertex; cruise is high enough that the corner
+    // cap actually binds. Compare the speed as each track passes through Q.
+    const corner = wp({ lng: 0.0032, lat: 0.0032 })
+    const fast = { ...profile, baseSpeedMps: 20 }
+    const speedAtVertex = (t: ReturnType<typeof buildTrack>) => {
+      let best = t[0]
+      for (const pt of t) {
+        if (Math.hypot(pt.lng - Q.lng, pt.lat - Q.lat) < Math.hypot(best.lng - Q.lng, best.lat - Q.lat)) best = pt
+      }
+      return best.speedMps
+    }
+    const withCorner = buildTrack(route([P, Q, corner], fast))
+    const noCorner = buildTrack(route([P, Q, corner], { ...fast, corneringMps2: 0 }))
+    expect(speedAtVertex(withCorner)).toBeLessThan(speedAtVertex(noCorner))
+  })
+
+  it('brakes into a dwell and accelerates out of it', () => {
+    const track = buildTrack(route([P, wp({ ...Q, dwellMs: 10_000 }), R], profile))
+    const stopped = track.filter((pt) => pt.speedMps === 0 && pt.t > 0)
+    expect(stopped.length).toBeGreaterThan(1)
+    // Duration is longer than the same profile with no dwell, by at least the dwell.
+    const noDwell = trackDurationMs(buildTrack(route([P, Q, R], profile)))
+    expect(trackDurationMs(track)).toBeGreaterThan(noDwell + 10_000 - 1)
+  })
+})
+
+describe('positionAtTime: antimeridian', () => {
+  it('takes the short way between two samples straddling the seam', () => {
+    const track = [
+      { lng: 179.9, lat: 0, altitude: 0, speedMps: 10, bearingDeg: 90, accuracyMeters: 5, t: 0 },
+      { lng: -179.9, lat: 0, altitude: 0, speedMps: 10, bearingDeg: 90, accuracyMeters: 5, t: 1000 },
+    ]
+    const mid = positionAtTime(track, 500)!
+    // Halfway is the seam itself, not somewhere in the middle of the Pacific.
+    expect(Math.abs(mid.lng)).toBeCloseTo(180, 6)
+  })
+
+  it('keeps its output normalised into [-180, 180)', () => {
+    const track = [
+      { lng: 179.5, lat: 0, altitude: 0, speedMps: 10, bearingDeg: 90, accuracyMeters: 5, t: 0 },
+      { lng: -179.5, lat: 0, altitude: 0, speedMps: 10, bearingDeg: 90, accuracyMeters: 5, t: 1000 },
+    ]
+    for (const t of [100, 400, 600, 900]) {
+      const lng = positionAtTime(track, t)!.lng
+      expect(lng).toBeGreaterThanOrEqual(-180)
+      expect(lng).toBeLessThan(180)
+    }
+  })
+})
+
 describe('positionAtTime', () => {
   const track = buildTrack(route([A, B, C]))
 

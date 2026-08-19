@@ -88,3 +88,22 @@ export function offsetMeters(
   const dLng = Math.abs(cosLat) < 1e-9 ? 0 : toDeg(eastMeters / (EARTH_RADIUS_M * cosLat))
   return { lng: p.lng + dLng, lat: p.lat + dLat }
 }
+
+/** Wraps a longitude into [-180, 180). */
+export function normalizeLongitude(lng: number): number {
+  return ((((lng + 180) % 360) + 360) % 360) - 180
+}
+
+/**
+ * Returns `lng` shifted by a whole number of turns so it sits within 180 degrees
+ * of `reference` -- the continuous-frame value, so interpolating or drawing from
+ * `reference` to here takes the short way rather than most of the way around the
+ * globe. Used at the antimeridian, where two points a couple of degrees apart on
+ * the ground are ~358 degrees apart in raw longitude.
+ */
+export function unwrapLongitude(reference: number, lng: number): number {
+  // Whole turns to subtract. Zero for anything already within 180 degrees, so an
+  // ordinary longitude comes back bit-for-bit unchanged rather than FP-nudged.
+  const turns = Math.round((lng - reference) / 360)
+  return lng - turns * 360
+}

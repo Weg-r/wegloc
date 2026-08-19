@@ -15,6 +15,13 @@ interface DepartureBoardProps {
   onScrub: (t: number) => void
   current: TrackPoint | null
   canPlay: boolean
+  speedMultiplier: number
+  onSetSpeedMultiplier: (multiplier: number) => void
+  onStep: (deltaMs: number) => void
+  tickRateMs: number
+  follow: boolean
+  onToggleFollow: () => void
+  onFit: () => void
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -47,6 +54,13 @@ export default function DepartureBoard({
   onScrub,
   current,
   canPlay,
+  speedMultiplier,
+  onSetSpeedMultiplier,
+  onStep,
+  tickRateMs,
+  follow,
+  onToggleFollow,
+  onFit,
 }: DepartureBoardProps) {
   return (
     <div className="bg-neutral-900 text-neutral-50 px-5 py-4 space-y-4" style={{ ['--accent' as string]: ACCENT }}>
@@ -130,6 +144,77 @@ export default function DepartureBoard({
         </Field>
       </div>
 
+      <details className="border-t-2 border-neutral-800 pt-3">
+        <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-widest text-neutral-400 select-none">
+          Fidelity
+        </summary>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 pt-3">
+          <Field label="Tick rate (ms)">
+            <input
+              type="number"
+              step={10}
+              min={16}
+              value={tickRateMs}
+              onChange={(e) => onUpdateSettings({ tickRateMs: Math.max(16, Number(e.target.value)) })}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Accel (m/s², 0 = off)">
+            <input
+              type="number"
+              step={0.5}
+              min={0}
+              value={settings.maxAccelMps2}
+              onChange={(e) => onUpdateSettings({ maxAccelMps2: Math.max(0, Number(e.target.value)) })}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Decel (m/s², 0 = off)">
+            <input
+              type="number"
+              step={0.5}
+              min={0}
+              value={settings.maxDecelMps2}
+              onChange={(e) => onUpdateSettings({ maxDecelMps2: Math.max(0, Number(e.target.value)) })}
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Cornering (m/s², 0 = off)">
+            <input
+              type="number"
+              step={0.5}
+              min={0}
+              value={settings.corneringMps2}
+              onChange={(e) => onUpdateSettings({ corneringMps2: Math.max(0, Number(e.target.value)) })}
+              className={inputClass}
+            />
+          </Field>
+        </div>
+        <div className="flex gap-2 pt-3 font-mono text-xs font-bold">
+          <button
+            type="button"
+            onClick={() => onUpdateSettings({ maxAccelMps2: 1.2, maxDecelMps2: 1.5, corneringMps2: 1 })}
+            className="px-2 py-1 border-2 border-neutral-700 uppercase tracking-wide text-neutral-300 hover:border-neutral-500"
+          >
+            Walk preset
+          </button>
+          <button
+            type="button"
+            onClick={() => onUpdateSettings({ maxAccelMps2: 2.5, maxDecelMps2: 3.5, corneringMps2: 3 })}
+            className="px-2 py-1 border-2 border-neutral-700 uppercase tracking-wide text-neutral-300 hover:border-neutral-500"
+          >
+            Car preset
+          </button>
+          <button
+            type="button"
+            onClick={() => onUpdateSettings({ maxAccelMps2: 0, maxDecelMps2: 0, corneringMps2: 0 })}
+            className="px-2 py-1 border-2 border-neutral-700 uppercase tracking-wide text-neutral-300 hover:border-neutral-500"
+          >
+            Off
+          </button>
+        </div>
+      </details>
+
       {selected && (
         <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-t-2 border-neutral-800 pt-3">
           <Field label={`${selected.id.slice(0, 6)} · altitude override (m)`}>
@@ -203,6 +288,66 @@ export default function DepartureBoard({
           <span className="font-mono text-sm font-bold tabular-nums w-24 text-right">
             {formatClock(playbackT)} / {formatClock(durationMs)}
           </span>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-xs font-bold">
+          <div className="flex gap-1" role="group" aria-label="Playback rate">
+            {[0.5, 1, 2, 5, 10].map((rate) => (
+              <button
+                key={rate}
+                type="button"
+                onClick={() => onSetSpeedMultiplier(rate)}
+                aria-pressed={speedMultiplier === rate}
+                className={`px-1.5 py-1 border-2 uppercase tracking-wide ${
+                  speedMultiplier === rate ? 'text-neutral-950' : 'border-neutral-700 text-neutral-400 hover:border-neutral-500'
+                }`}
+                style={speedMultiplier === rate ? { backgroundColor: ACCENT, borderColor: ACCENT } : undefined}
+              >
+                {rate}x
+              </button>
+            ))}
+          </div>
+
+          <div className="flex gap-1" role="group" aria-label="Step by one tick">
+            <button
+              type="button"
+              disabled={!canPlay}
+              onClick={() => onStep(-tickRateMs)}
+              aria-label="Step back one tick"
+              className="px-2 py-1 border-2 border-neutral-700 text-neutral-300 hover:border-neutral-500 disabled:opacity-30"
+            >
+              ‹ tick
+            </button>
+            <button
+              type="button"
+              disabled={!canPlay}
+              onClick={() => onStep(tickRateMs)}
+              aria-label="Step forward one tick"
+              className="px-2 py-1 border-2 border-neutral-700 text-neutral-300 hover:border-neutral-500 disabled:opacity-30"
+            >
+              tick ›
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={onToggleFollow}
+            aria-pressed={follow}
+            className={`px-2 py-1 border-2 uppercase tracking-wide ${
+              follow ? 'text-neutral-950' : 'border-neutral-700 text-neutral-400 hover:border-neutral-500'
+            }`}
+            style={follow ? { backgroundColor: ACCENT, borderColor: ACCENT } : undefined}
+          >
+            Follow
+          </button>
+
+          <button
+            type="button"
+            onClick={onFit}
+            className="px-2 py-1 border-2 border-neutral-700 uppercase tracking-wide text-neutral-300 hover:border-neutral-500"
+          >
+            Fit
+          </button>
         </div>
 
         <div className="grid grid-cols-3 gap-3 mt-3 font-mono text-xs">

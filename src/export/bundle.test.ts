@@ -18,6 +18,7 @@ import type { Route } from '../types/route'
 // so the bytes are the thing under test.
 import walkGolden from './__fixtures__/v1-walk.json?raw'
 import stopsGolden from './__fixtures__/v1-stops.json?raw'
+import legacyGolden from './__fixtures__/v1-legacy-no-speed-profile.json?raw'
 
 const EXPORTED_AT = 1_700_000_500_000
 
@@ -47,6 +48,21 @@ describe('golden bundles', () => {
       expect(imported.waypoints.length).toBeGreaterThan(0)
       expect(imported.name).toBeTruthy()
     }
+  })
+})
+
+describe('backward compatibility', () => {
+  // A frozen bundle written before the speed-profile fields existed. It must
+  // keep importing, with the new limits defaulting to off. Never regenerate it:
+  // that is the point of freezing it.
+  it('reads a v1 bundle that predates the speed-profile fields', () => {
+    const imported = readBundleText(legacyGolden)
+    expect(imported.settings.maxAccelMps2).toBe(0)
+    expect(imported.settings.maxDecelMps2).toBe(0)
+    expect(imported.settings.corneringMps2).toBe(0)
+    // The rest of the settings still come through.
+    expect(imported.settings.baseSpeedMps).toBeGreaterThan(0)
+    expect(imported.waypoints.length).toBeGreaterThan(0)
   })
 })
 

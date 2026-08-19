@@ -55,7 +55,10 @@
       "accuracyMeters": 6,
       "jitterMeters": 4,
       "loop": false,
-      "tickRateMs": 200
+      "tickRateMs": 200,
+      "maxAccelMps2": 0,
+      "maxDecelMps2": 0,
+      "corneringMps2": 0
     }
   }
 }

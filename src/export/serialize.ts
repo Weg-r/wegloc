@@ -37,6 +37,9 @@ export function routeToBundle(route: Route, exportedAt: number): ExportBundleV1 
         jitterMeters: route.settings.jitterMeters,
         loop: route.settings.loop,
         tickRateMs: route.settings.tickRateMs,
+        maxAccelMps2: route.settings.maxAccelMps2,
+        maxDecelMps2: route.settings.maxDecelMps2,
+        corneringMps2: route.settings.corneringMps2,
       } satisfies BundleSettingsV1,
     },
   }

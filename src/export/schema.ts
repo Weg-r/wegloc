@@ -41,6 +41,13 @@ export interface BundleSettingsV1 {
   jitterMeters: number
   loop: boolean
   tickRateMs: number
+  /**
+   * Speed-profile limits, added after the first v1 bundles shipped. Optional so
+   * an older bundle without them still reads; absent means "off".
+   */
+  maxAccelMps2?: number
+  maxDecelMps2?: number
+  corneringMps2?: number
 }
 
 export interface BundleRouteV1 {

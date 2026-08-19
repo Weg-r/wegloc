@@ -8,23 +8,33 @@ import type {
 } from 'maplibre-gl'
 import { useRouteStore } from '../store/routeStore'
 import { useMapLibre } from './useMapLibre'
-import { setSourceData, trackPointToFeature, waypointsToLine, waypointsToPoints } from './routeSource'
+import { boundsForWaypoints, setSourceData, trackPointToFeature, waypointsToLine, waypointsToPoints } from './routeSource'
 import { ACCENT } from '../lib/theme'
-import type { TrackPoint } from '../types/route'
+import type { TrackPoint, Waypoint } from '../types/route'
 
 const LINE_SOURCE = 'route-line'
 const LINE_LAYER = 'route-line-layer'
 const POINTS_SOURCE = 'route-points'
 const POINTS_LAYER = 'route-points-layer'
+// A larger, invisible circle so a fingertip can grab a waypoint the eye sees as a small dot.
+const POINTS_HIT_LAYER = 'route-points-hit-layer'
 const MARKER_SOURCE = 'route-marker'
 const MARKER_LAYER = 'route-marker-layer'
 
 export interface RouteMapHandle {
   flyTo: (lng: number, lat: number) => void
+  /** Moves the playback marker imperatively, outside React's render cycle. */
+  setMarker: (point: TrackPoint | null) => void
+  /** Keeps the marker on screen during playback, easing only when it nears the edge. */
+  follow: (point: TrackPoint) => void
+  /** Frames the whole route with padding; a lone waypoint just centres. */
+  fitRoute: (waypoints: Waypoint[]) => void
 }
 
 interface RouteMapProps {
   current: TrackPoint | null
+  /** While true, the marker is driven imperatively by the playback engine, not by `current`. */
+  playing: boolean
 }
 
 /**
@@ -32,7 +42,7 @@ interface RouteMapProps {
  * interaction (add / select / drag a waypoint). The only place in the app
  * that touches maplibre-gl.
  */
-const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ current }, ref) {
+const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ current, playing }, ref) {
   const route = useRouteStore((s) => s.route)
   const selectedWaypointId = useRouteStore((s) => s.selectedWaypointId)
   const addWaypoint = useRouteStore((s) => s.addWaypoint)
@@ -55,6 +65,35 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
     flyTo: (lng, lat) => {
       mapRef.current?.flyTo({ center: [lng, lat], duration: 500 })
     },
+    setMarker: (point) => {
+      setSourceData(mapRef.current, MARKER_SOURCE, trackPointToFeature(point))
+    },
+    follow: (point) => {
+      const map = mapRef.current
+      if (!map) return
+      // Only chase when the marker leaves the middle of the viewport, so the map
+      // is not repainted every frame and a user pan is not immediately undone.
+      const b = map.getBounds()
+      const padLng = (b.getEast() - b.getWest()) * 0.2
+      const padLat = (b.getNorth() - b.getSouth()) * 0.2
+      const outside =
+        point.lng < b.getWest() + padLng ||
+        point.lng > b.getEast() - padLng ||
+        point.lat < b.getSouth() + padLat ||
+        point.lat > b.getNorth() - padLat
+      if (outside) map.easeTo({ center: [point.lng, point.lat], duration: 600 })
+    },
+    fitRoute: (waypoints) => {
+      const map = mapRef.current
+      if (!map) return
+      const bounds = boundsForWaypoints(waypoints)
+      if (!bounds) return
+      if (bounds.point) {
+        map.easeTo({ center: bounds.point, zoom: Math.max(map.getZoom(), 14), duration: 500 })
+      } else {
+        map.fitBounds(bounds.bbox, { padding: 64, maxZoom: 16, duration: 500 })
+      }
+    },
   }))
 
   useEffect(() => {
@@ -74,6 +113,13 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
 
     if (!map.getSource(POINTS_SOURCE)) {
       map.addSource(POINTS_SOURCE, { type: 'geojson', data: waypointsToPoints(route.waypoints, selectedWaypointId) })
+      map.addLayer({
+        id: POINTS_HIT_LAYER,
+        type: 'circle',
+        source: POINTS_SOURCE,
+        // ~44px comfortable touch target, transparent so it never shows.
+        paint: { 'circle-radius': 22, 'circle-color': '#000000', 'circle-opacity': 0 },
+      })
       map.addLayer({
         id: POINTS_LAYER,
         type: 'circle',
@@ -101,7 +147,7 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
       // A click on an existing waypoint is a selection, handled below. A click on
       // the line splits that leg, which is how a waypoint gets inserted into the
       // middle of a route. Anywhere else appends.
-      if (map.queryRenderedFeatures(e.point, { layers: [POINTS_LAYER] }).length > 0) return
+      if (map.queryRenderedFeatures(e.point, { layers: [POINTS_HIT_LAYER] }).length > 0) return
 
       // A few pixels of slop: the line is 5px wide and a trackpad is not precise.
       const slop = 6
@@ -151,29 +197,29 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
     }
 
     map.on('click', handleMapClick)
-    map.on('click', POINTS_LAYER, handlePointClick)
-    map.on('mousedown', POINTS_LAYER, handleDragStart)
-    map.on('touchstart', POINTS_LAYER, handleDragStart)
+    map.on('click', POINTS_HIT_LAYER, handlePointClick)
+    map.on('mousedown', POINTS_HIT_LAYER, handleDragStart)
+    map.on('touchstart', POINTS_HIT_LAYER, handleDragStart)
     map.on('mousemove', handleDragMove)
     map.on('touchmove', handleDragMove)
     map.on('mouseup', handleDragEnd)
     map.on('touchend', handleDragEnd)
-    map.on('mouseenter', POINTS_LAYER, handleEnter)
-    map.on('mouseleave', POINTS_LAYER, handleLeave)
+    map.on('mouseenter', POINTS_HIT_LAYER, handleEnter)
+    map.on('mouseleave', POINTS_HIT_LAYER, handleLeave)
     map.on('mouseenter', LINE_LAYER, handleLineEnter)
     map.on('mouseleave', LINE_LAYER, handleLeave)
 
     return () => {
       map.off('click', handleMapClick)
-      map.off('click', POINTS_LAYER, handlePointClick)
-      map.off('mousedown', POINTS_LAYER, handleDragStart)
-      map.off('touchstart', POINTS_LAYER, handleDragStart)
+      map.off('click', POINTS_HIT_LAYER, handlePointClick)
+      map.off('mousedown', POINTS_HIT_LAYER, handleDragStart)
+      map.off('touchstart', POINTS_HIT_LAYER, handleDragStart)
       map.off('mousemove', handleDragMove)
       map.off('touchmove', handleDragMove)
       map.off('mouseup', handleDragEnd)
       map.off('touchend', handleDragEnd)
-      map.off('mouseenter', POINTS_LAYER, handleEnter)
-      map.off('mouseleave', POINTS_LAYER, handleLeave)
+      map.off('mouseenter', POINTS_HIT_LAYER, handleEnter)
+      map.off('mouseleave', POINTS_HIT_LAYER, handleLeave)
       map.off('mouseenter', LINE_LAYER, handleLineEnter)
       map.off('mouseleave', LINE_LAYER, handleLeave)
     }
@@ -189,8 +235,12 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
   }, [mapRef, ready, route.waypoints, selectedWaypointId])
 
   useEffect(() => {
+    // During playback the engine owns the marker imperatively; writing it from
+    // this 10Hz prop as well would fight that and stutter. When paused, scrubbing,
+    // or freshly loaded, `current` drives it.
+    if (playing) return
     setSourceData(mapRef.current, MARKER_SOURCE, trackPointToFeature(current))
-  }, [mapRef, ready, current])
+  }, [mapRef, ready, current, playing])
 
   return (
     <div className="relative h-full w-full">

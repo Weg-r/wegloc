@@ -1,10 +1,11 @@
-import { useCallback, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useRouteStore } from '../store/routeStore'
-import { useTrack, useCurrentPosition, usePlaybackClock } from '../store/hooks'
+import { useTrack, useCurrentPosition } from '../store/hooks'
 import { trackDurationMs } from '../routes/interpolate'
 import { useFlushPendingWrites, useHydrateFromDb, useRememberLastOpened } from './hydrate'
 import { useRouteLibrary } from './library'
 import { useUndoRedoShortcuts } from './shortcuts'
+import { usePlaybackEngine } from './playback'
 import { downloadRoute, pickRouteFile, readRouteFile } from './routeFile'
 import { FIXTURES_ENABLED, loadFixtures } from '../db/fixtures'
 import RouteMap, { type RouteMapHandle } from '../map/RouteMap'
@@ -33,6 +34,7 @@ export default function App() {
   const updateSettings = useRouteStore((s) => s.updateSettings)
   const setPlaying = useRouteStore((s) => s.setPlaying)
   const setPlaybackTime = useRouteStore((s) => s.setPlaybackTime)
+  const setSpeedMultiplier = useRouteStore((s) => s.setSpeedMultiplier)
   const addWaypoint = useRouteStore((s) => s.addWaypoint)
   const reorderWaypoint = useRouteStore((s) => s.reorderWaypoint)
   const reverseRoute = useRouteStore((s) => s.reverseRoute)
@@ -49,9 +51,10 @@ export default function App() {
   const [importError, setImportError] = useState<string | null>(null)
   const [dropActive, setDropActive] = useState(false)
 
+  const [follow, setFollow] = useState(true)
+
   const track = useTrack()
   const current = useCurrentPosition(track)
-  usePlaybackClock(track)
   const durationMs = trackDurationMs(track)
 
   const selected = useMemo(
@@ -61,6 +64,24 @@ export default function App() {
 
   const mapHandleRef = useRef<RouteMapHandle>(null)
   const canPlay = route.waypoints.length >= 2 && durationMs > 0
+
+  usePlaybackEngine(track, durationMs, mapHandleRef, follow && playback.playing)
+
+  // Frame the route when a different one is opened, so switching routes actually
+  // moves the camera (the map only reads its initial centre otherwise).
+  const routeId = route.id
+  useEffect(() => {
+    mapHandleRef.current?.fitRoute(useRouteStore.getState().route.waypoints)
+  }, [routeId])
+
+  const stepBy = useCallback(
+    (deltaMs: number) => {
+      setPlaying(false)
+      const next = Math.min(Math.max(useRouteStore.getState().playback.t + deltaMs, 0), durationMs)
+      setPlaybackTime(next)
+    },
+    [setPlaying, setPlaybackTime, durationMs],
+  )
 
   // Stable identities: the memoized rows in LineCard are only worth anything if
   // their callback props don't change on every render of the shell. Reading the
@@ -121,13 +142,13 @@ export default function App() {
 
   return (
     <div
-      className="h-screen w-screen flex bg-white text-neutral-900 overflow-hidden"
+      className="flex h-[100dvh] w-screen flex-col overflow-hidden bg-white text-neutral-900 lg:flex-row"
       onDragOver={handleDragOver}
       onDragLeave={() => setDropActive(false)}
       onDrop={handleDrop}
     >
-      <div className="flex-1 relative min-w-0">
-        <RouteMap ref={mapHandleRef} current={current} />
+      <div className="relative h-[45dvh] min-h-0 min-w-0 flex-none lg:h-full lg:flex-1">
+        <RouteMap ref={mapHandleRef} current={current} playing={playback.playing} />
 
         <div
           className="absolute top-4 right-4 z-10 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-white shadow-sm"
@@ -159,7 +180,7 @@ export default function App() {
         )}
       </div>
 
-      <aside className="w-[380px] shrink-0 flex flex-col border-l-4 border-neutral-900">
+      <aside className="flex h-[55dvh] w-full shrink-0 flex-col border-t-4 border-neutral-900 lg:h-full lg:w-[380px] lg:border-l-4 lg:border-t-0">
         <RouteBar
           routeId={route.id}
           routeName={route.name}
@@ -216,6 +237,13 @@ export default function App() {
           onScrub={setPlaybackTime}
           current={current}
           canPlay={canPlay}
+          speedMultiplier={playback.speedMultiplier}
+          onSetSpeedMultiplier={setSpeedMultiplier}
+          onStep={stepBy}
+          tickRateMs={route.settings.tickRateMs}
+          follow={follow}
+          onToggleFollow={() => setFollow((f) => !f)}
+          onFit={() => mapHandleRef.current?.fitRoute(useRouteStore.getState().route.waypoints)}
         />
       </aside>
     </div>

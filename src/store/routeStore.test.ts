@@ -456,3 +456,10 @@ describe('waypoint operations', () => {
     expect(useRouteStore.getState().route.waypoints.map((wp) => wp.id)).toEqual(['b', 'a'])
   })
 })
+
+describe('playback rate', () => {
+  it('sets the multiplier', () => {
+    useRouteStore.getState().setSpeedMultiplier(5)
+    expect(useRouteStore.getState().playback.speedMultiplier).toBe(5)
+  })
+})

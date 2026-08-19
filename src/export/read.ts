@@ -45,6 +45,12 @@ function asNullableNumber(value: unknown, path: string): number | null {
   return asNumber(value, path)
 }
 
+/** For optional numeric settings added after the first bundles shipped. */
+function asNumberOr(value: unknown, fallback: number, path: string): number {
+  if (value === undefined || value === null) return fallback
+  return asNumber(value, path)
+}
+
 function asString(value: unknown, path: string): string {
   if (typeof value !== 'string') fail(path, 'a string')
   return value
@@ -82,6 +88,10 @@ function readSettingsV1(value: unknown, path: string): SimulationSettings {
     jitterMeters: asNumber(s.jitterMeters, `${path}.jitterMeters`),
     loop: asBoolean(s.loop, `${path}.loop`),
     tickRateMs: asNumber(s.tickRateMs, `${path}.tickRateMs`),
+    // Optional: a bundle written before speed profiles existed simply has them off.
+    maxAccelMps2: asNumberOr(s.maxAccelMps2, 0, `${path}.maxAccelMps2`),
+    maxDecelMps2: asNumberOr(s.maxDecelMps2, 0, `${path}.maxDecelMps2`),
+    corneringMps2: asNumberOr(s.corneringMps2, 0, `${path}.corneringMps2`),
   }
 }
 

@@ -103,7 +103,7 @@ interface RouteState {
 
   setPlaying: (playing: boolean) => void
   setPlaybackTime: (t: number) => void
-  advancePlayback: (deltaMs: number, durationMs: number) => void
+  setSpeedMultiplier: (multiplier: number) => void
 
   /** Persists now, cancelling any pending debounced write. Call on gesture end, not mid-drag. */
   persist: () => void
@@ -419,16 +419,8 @@ export const useRouteStore = create<RouteState>((set, get) => {
 
     setPlaybackTime: (t) => set((state) => ({ playback: { ...state.playback, t } })),
 
-    advancePlayback: (deltaMs, durationMs) =>
-      set((state) => {
-        if (!state.playback.playing || durationMs <= 0) return state
-        let next = state.playback.t + deltaMs * state.playback.speedMultiplier
-        if (next >= durationMs) {
-          next = state.route.settings.loop ? next % durationMs : durationMs
-        }
-        const playing = state.route.settings.loop ? state.playback.playing : next < durationMs
-        return { playback: { ...state.playback, t: next, playing } }
-      }),
+    setSpeedMultiplier: (multiplier) =>
+      set((state) => ({ playback: { ...state.playback, speedMultiplier: multiplier } })),
 
     persist: () => persistNow(false),
 

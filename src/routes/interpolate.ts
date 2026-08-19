@@ -1,5 +1,13 @@
-import { bearing, haversineDistance, interpolatePosition, offsetMeters } from './geo'
+import { bearing, haversineDistance, interpolatePosition, normalizeLongitude, offsetMeters, unwrapLongitude } from './geo'
 import { correlatedNoise } from './noise'
+import {
+  planLegTimings,
+  sampleLegProfile,
+  speedProfileEnabled,
+  type LegTiming,
+  type ProfileLeg,
+  type SpeedLimits,
+} from './speedProfile'
 import type { Route, SimulationSettings, TrackPoint, Waypoint } from '../types/route'
 
 /**
@@ -124,35 +132,82 @@ export function buildTrack(route: Pick<Route, 'waypoints' | 'settings'>): TrackP
     return track
   }
 
+  const legCount = waypoints.length - 1
+
+  // Bearings once: reused for the leg heading, for the zero-length-leg fallback,
+  // and for measuring the turn at each vertex when the speed profile is on.
+  const distances = new Array<number>(legCount)
+  const legBearings = new Array<number>(legCount)
+  for (let i = 0; i < legCount; i++) {
+    distances[i] = haversineDistance(waypoints[i], waypoints[i + 1])
+    legBearings[i] = distances[i] > 0 ? bearing(waypoints[i], waypoints[i + 1]) : (legBearings[i - 1] ?? 0)
+  }
+
+  const cruiseFor = (legIndex: number): number =>
+    Math.max(MIN_SPEED_MPS, waypoints[legIndex + 1].legSpeedMps ?? settings.baseSpeedMps)
+
+  const limits: SpeedLimits = {
+    maxAccelMps2: settings.maxAccelMps2 ?? 0,
+    maxDecelMps2: settings.maxDecelMps2 ?? 0,
+    corneringMps2: settings.corneringMps2 ?? 0,
+  }
+  const useProfile = speedProfileEnabled(limits)
+
+  let timings: LegTiming[] | null = null
+  if (useProfile) {
+    const legs: ProfileLeg[] = distances.map((length, i) => ({
+      length,
+      cruiseMps: cruiseFor(i),
+      bearingDeg: legBearings[i],
+    }))
+    // The route starts and ends at rest, and stops dead at every dwell; the
+    // profile brakes into each and accelerates back out.
+    const forcedStops = new Set<number>([0, legCount])
+    waypoints.forEach((wp, j) => {
+      if ((wp.dwellMs ?? 0) > 0) forcedStops.add(j)
+    })
+    timings = planLegTimings(legs, limits, forcedStops)
+  }
+
   let elapsed = 0
 
-  for (let i = 0; i < waypoints.length - 1; i++) {
+  for (let i = 0; i < legCount; i++) {
     const from = waypoints[i]
     const to = waypoints[i + 1]
-    const distance = haversineDistance(from, to)
-    const speed = Math.max(MIN_SPEED_MPS, to.legSpeedMps ?? settings.baseSpeedMps)
-    const legBearing = distance > 0 ? bearing(from, to) : (track.at(-1)?.bearingDeg ?? 0)
-    const durationMs = (distance / speed) * 1000
+    const distance = distances[i]
+    const cruise = cruiseFor(i)
+    const legBearing = legBearings[i]
+    const timing = timings?.[i] ?? null
+    const durationMs = timing ? timing.durationMs : (distance / cruise) * 1000
     const altFrom = altitudeAt(waypoints, i, flatMode, settings.flatAltitude)
     const altTo = altitudeAt(waypoints, i + 1, flatMode, settings.flatAltitude)
 
     if (i === 0) {
-      const stopped = (from.dwellMs ?? 0) > 0
-      push(from.lng, from.lat, altFrom, stopped ? 0 : speed, legBearing, 0)
+      const startSpeed = timing ? timing.entryMps : (from.dwellMs ?? 0) > 0 ? 0 : cruise
+      push(from.lng, from.lat, altFrom, startSpeed, legBearing, 0)
     }
 
     // The sample at `from` was emitted by the previous leg, or just above for the
     // first waypoint; the dwell holds that position on the heading it arrived on.
     elapsed += pushDwell(from, altFrom, track.at(-1)?.bearingDeg ?? legBearing, elapsed)
 
-    // Only a zero-length leg contributes no time now that speed is clamped.
+    // A zero-length leg (and, under the profile, a leg with no achievable motion)
+    // contributes no time.
     if (durationMs === 0) continue
 
     const steps = Math.max(1, Math.ceil(durationMs / tick))
     for (let s = 1; s <= steps; s++) {
-      const f = s / steps
-      const pos = interpolatePosition(from, to, f)
-      push(pos.lng, pos.lat, altFrom + (altTo - altFrom) * f, speed, legBearing, elapsed + f * durationMs)
+      if (timing) {
+        const tl = s < steps ? s * tick : durationMs
+        const sample = sampleLegProfile(timing, distance, limits.maxAccelMps2, limits.maxDecelMps2, tl)
+        const f = distance > 0 ? Math.min(1, sample.distance / distance) : 1
+        const pos = interpolatePosition(from, to, f)
+        push(pos.lng, pos.lat, altFrom + (altTo - altFrom) * f, sample.speedMps, legBearing, elapsed + tl)
+      } else {
+        const f = s / steps
+        const pos = interpolatePosition(from, to, f)
+        push(pos.lng, pos.lat, altFrom + (altTo - altFrom) * f, cruise, legBearing, elapsed + f * durationMs)
+      }
     }
 
     elapsed += durationMs
@@ -198,8 +253,12 @@ export function positionAtTime(track: TrackPoint[], t: number): TrackPoint | nul
   const span = b.t - a.t
   const f = span > 0 ? (clamped - a.t) / span : 0
 
+  // Unwrap across the antimeridian: two consecutive samples can be ~358 degrees
+  // apart in raw longitude while a couple of degrees apart on the ground.
+  const bLng = unwrapLongitude(a.lng, b.lng)
+
   return {
-    lng: a.lng + (b.lng - a.lng) * f,
+    lng: normalizeLongitude(a.lng + (bLng - a.lng) * f),
     lat: a.lat + (b.lat - a.lat) * f,
     altitude: a.altitude + (b.altitude - a.altitude) * f,
     speedMps: a.speedMps + (b.speedMps - a.speedMps) * f,

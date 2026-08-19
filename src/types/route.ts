@@ -22,6 +22,14 @@ export interface SimulationSettings {
   jitterMeters: number
   loop: boolean
   tickRateMs: number
+  /**
+   * Speed-profile limits. All default to 0, meaning "off": speed changes are
+   * instant, as they always were. Set any of them and the interpolator ramps
+   * speed and slows for corners instead of stepping between leg speeds.
+   */
+  maxAccelMps2: number
+  maxDecelMps2: number
+  corneringMps2: number
 }
 
 export interface Route {
@@ -52,4 +60,7 @@ export const DEFAULT_SETTINGS: SimulationSettings = {
   jitterMeters: 0,
   loop: false,
   tickRateMs: 200,
+  maxAccelMps2: 0,
+  maxDecelMps2: 0,
+  corneringMps2: 0,
 }
