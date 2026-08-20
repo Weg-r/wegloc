@@ -24,6 +24,11 @@ export interface GeocodeResult {
   lat: number
   label: string
 }
+export type FoundPlace = GeocodeResult
+export interface SearchProvider {
+  url: (query: string) => string
+  parse: (payload: unknown) => FoundPlace | null
+}
 /** Rounded so two waypoints a few metres apart share a cache entry (~11m at 4 dp). */
 export function geocodeCacheKey(lng: number, lat: number): string {
   return `${lat.toFixed(4)},${lng.toFixed(4)}`
@@ -52,6 +57,40 @@ export function parseNominatim(payload: unknown): string | null {
     return p.display_name.split(',')[0].trim() || null
   }
   return null
+}
+
+/**
+ * Reads the first result of a Nominatim-style search.
+ *
+ * Coordinates come back as strings, and a result without usable ones is no
+ * result at all: a waypoint at NaN would poison every distance on the route.
+ */
+export function parseNominatimSearchOne(payload: unknown): FoundPlace | null {
+  const first = Array.isArray(payload) ? payload[0] : payload
+  if (typeof first !== 'object' || first === null) return null
+  const p = first as Record<string, unknown>
+
+  const lat = Number(p.lat)
+  const lng = Number(p.lon ?? p.lng)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null
+
+  const display = typeof p.display_name === 'string' ? p.display_name.trim() : ''
+  const name = typeof p.name === 'string' ? p.name.trim() : ''
+  return { lng, lat, label: name || display.split(',')[0]?.trim() || '' }
+}
+
+export function makeSearchProvider(template: string): SearchProvider {
+  return {
+    url: (query) => template.replaceAll('{q}', encodeURIComponent(query)),
+    parse: parseNominatimSearchOne,
+  }
+}
+
+/** The search endpoint configured for this build, or null when none is set. */
+export function configuredSearchProvider(): SearchProvider | null {
+  const template = import.meta.env.VITE_GEOCODE_SEARCH_URL as string | undefined
+  return template ? makeSearchProvider(template) : null
 }
 
 export function makeProvider(template: string): GeocodeProvider {

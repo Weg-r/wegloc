@@ -1,15 +1,19 @@
 import { getGeocodeCache, putGeocodeCache } from '../db'
 import {
   configuredProvider,
+  configuredSearchProvider,
   geocodeCacheKey,
   parseNominatimSearch,
   searchUrl,
+  type FoundPlace,
   type GeocodeProvider,
   type GeocodeResult,
+  type SearchProvider,
 } from './provider'
 
 export { geocodeCacheKey } from './provider'
 export type { GeocodeResult } from './provider'
+export type { FoundPlace } from './provider'
 
 /**
  * The one place that reverse-geocodes: the only module that fetches a place
@@ -51,6 +55,10 @@ export async function searchAddress(query: string): Promise<GeocodeResult[]> {
     if (!response.ok) throw new Error(`Address search responded ${response.status}`)
     return parseNominatimSearch(await response.json())
   })
+}
+/** Whether an address can be looked up at all, so the field can say what it takes. */
+export function placeSearchAvailable(): boolean {
+  return configuredSearchProvider() !== null
 }
 
 let lastRequestAt = 0
