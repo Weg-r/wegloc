@@ -3,6 +3,9 @@ import { useRouteStore } from '../store/routeStore'
 import { useTrack, useCurrentPosition } from '../store/hooks'
 import { trackDurationMs } from '../routes/interpolate'
 import { totalDistanceMeters } from '../routes/ops'
+import { useRouting } from './routing'
+import { addressSearchAvailable } from '../geocode'
+import { routingAvailable } from '../routing'
 import { SPEED_UNITS } from '../lib/units'
 import { useFlushPendingWrites, useHydrateFromDb, useRememberLastOpened } from './hydrate'
 import { useRouteLibrary } from './library'
@@ -18,6 +21,7 @@ import DepartureBoard from '../ui/DepartureBoard'
 import RouteBar from '../ui/RouteBar'
 import SummaryStrip from '../ui/SummaryStrip'
 import WaypointTools from '../ui/WaypointTools'
+import AddressSearch from '../ui/AddressSearch'
 import { ACCENT } from '../lib/theme'
 
 export default function App() {
@@ -44,6 +48,9 @@ export default function App() {
   const setSpeedUnit = useRouteStore((s) => s.setSpeedUnit)
   const geocodeEnabled = useRouteStore((s) => s.geocodeEnabled)
   const setGeocodeEnabled = useRouteStore((s) => s.setGeocodeEnabled)
+  const roadFollowing = useRouteStore((s) => s.roadFollowing)
+  const setRoadFollowing = useRouteStore((s) => s.setRoadFollowing)
+  const travelMode = useRouteStore((s) => s.travelMode)
   const dragging = useRouteStore((s) => s.draggingWaypointId !== null)
   const addWaypoint = useRouteStore((s) => s.addWaypoint)
   const reorderWaypoint = useRouteStore((s) => s.reorderWaypoint)
@@ -74,6 +81,10 @@ export default function App() {
 
   const distanceMeters = useMemo(() => totalDistanceMeters(route.waypoints), [route.waypoints])
   const geocodeAvailable = useMemo(() => geocodingAvailable(), [])
+  const searchAvailable = useMemo(() => addressSearchAvailable(), [])
+  const routerAvailable = useMemo(() => routingAvailable(), [])
+
+  const routingStatus = useRouting(route.waypoints, travelMode, routerAvailable && roadFollowing, dragging)
   const { labels: geocodedLabels, status: geocodeStatus } = useGeocodedLabels(
     route.waypoints,
     geocodeEnabled && geocodeAvailable,
@@ -118,6 +129,18 @@ export default function App() {
   )
 
   const handleDeselect = useCallback(() => selectWaypoint(null), [selectWaypoint])
+
+  const addAt = useCallback(
+    (lng: number, lat: number, label?: string) => {
+      addWaypoint(lng, lat)
+      if (label) {
+        const added = useRouteStore.getState().route.waypoints.at(-1)
+        if (added) updateWaypoint(added.id, { label })
+      }
+      mapHandleRef.current?.flyTo(lng, lat)
+    },
+    [addWaypoint, updateWaypoint],
+  )
 
   const importFile = useCallback(
     async (file: File) => {
@@ -170,7 +193,7 @@ export default function App() {
       onDrop={handleDrop}
     >
       <div className="relative h-[45dvh] min-h-0 min-w-0 flex-none lg:h-full lg:flex-1">
-        <RouteMap ref={mapHandleRef} current={current} playing={playback.playing} />
+        <RouteMap ref={mapHandleRef} current={current} playing={playback.playing} addByAddressOnly={searchAvailable} />
 
         <div
           className="absolute top-4 right-4 z-10 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-white shadow-sm"
@@ -248,14 +271,15 @@ export default function App() {
           geocodedLabels={geocodedLabels}
         />
 
-        <WaypointTools
-          waypointCount={route.waypoints.length}
-          onAddAtCoordinates={(lng, lat) => {
-            addWaypoint(lng, lat)
-            mapHandleRef.current?.flyTo(lng, lat)
-          }}
-          onReverse={reverseRoute}
-        />
+        {searchAvailable ? (
+          <AddressSearch onPick={addAt} />
+        ) : (
+          <WaypointTools
+            waypointCount={route.waypoints.length}
+            onAddAtCoordinates={(lng, lat) => addAt(lng, lat)}
+            onReverse={reverseRoute}
+          />
+        )}
 
         <DepartureBoard
           settings={route.settings}
@@ -282,6 +306,11 @@ export default function App() {
           geocodeEnabled={geocodeEnabled}
           onToggleGeocode={() => setGeocodeEnabled(!geocodeEnabled)}
           geocodeStatus={geocodeStatus}
+          routerAvailable={routerAvailable}
+          roadFollowing={roadFollowing}
+          onToggleRoadFollowing={() => setRoadFollowing(!roadFollowing)}
+          routingStatus={routingStatus}
+          travelMode={travelMode}
         />
       </aside>
     </div>

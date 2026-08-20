@@ -14,7 +14,8 @@
         "altitude": null,
         "legSpeedMps": null,
         "dwellMs": null,
-        "label": null
+        "label": null,
+        "path": null
       },
       {
         "id": "stop-2",
@@ -23,7 +24,8 @@
         "altitude": null,
         "legSpeedMps": 13.9,
         "dwellMs": null,
-        "label": null
+        "label": null,
+        "path": null
       },
       {
         "id": "stop-3",
@@ -32,7 +34,8 @@
         "altitude": null,
         "legSpeedMps": 13.9,
         "dwellMs": 45000,
-        "label": null
+        "label": null,
+        "path": null
       },
       {
         "id": "stop-4",
@@ -41,7 +44,8 @@
         "altitude": null,
         "legSpeedMps": 4.2,
         "dwellMs": null,
-        "label": null
+        "label": null,
+        "path": null
       },
       {
         "id": "stop-5",
@@ -50,7 +54,8 @@
         "altitude": null,
         "legSpeedMps": 13.9,
         "dwellMs": 15000,
-        "label": null
+        "label": null,
+        "path": null
       }
     ],
     "settings": {

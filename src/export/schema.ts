@@ -33,6 +33,8 @@ export interface BundleWaypointV1 {
   dwellMs: number | null
   /** User-typed name for the waypoint. Optional; added after the first bundles shipped. */
   label?: string | null
+  /** Routed polyline for the leg arriving here, [lng, lat] pairs. Optional; absent means a straight leg. */
+  path?: [number, number][] | null
 }
 
 export interface BundleSettingsV1 {

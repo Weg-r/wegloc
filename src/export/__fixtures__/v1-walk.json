@@ -14,7 +14,8 @@
         "altitude": 33,
         "legSpeedMps": null,
         "dwellMs": null,
-        "label": null
+        "label": null,
+        "path": null
       },
       {
         "id": "cdm-2",
@@ -23,7 +24,8 @@
         "altitude": 35,
         "legSpeedMps": 1.4,
         "dwellMs": null,
-        "label": null
+        "label": null,
+        "path": null
       },
       {
         "id": "cdm-3",
@@ -32,7 +34,8 @@
         "altitude": 34,
         "legSpeedMps": 2.8,
         "dwellMs": null,
-        "label": null
+        "label": null,
+        "path": null
       },
       {
         "id": "cdm-4",
@@ -41,7 +44,8 @@
         "altitude": 36,
         "legSpeedMps": 1.4,
         "dwellMs": null,
-        "label": null
+        "label": null,
+        "path": null
       },
       {
         "id": "cdm-5",
@@ -50,7 +54,8 @@
         "altitude": 34,
         "legSpeedMps": 1.1,
         "dwellMs": null,
-        "label": null
+        "label": null,
+        "path": null
       }
     ],
     "settings": {

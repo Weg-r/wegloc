@@ -463,3 +463,47 @@ describe('playback rate', () => {
     expect(useRouteStore.getState().playback.speedMultiplier).toBe(5)
   })
 })
+
+describe('routed paths', () => {
+  it('applies one polyline per leg without an undo step', () => {
+    const before = useRouteStore.getState().past.length
+    useRouteStore.getState().applyRoutedPaths([[[0, 0], [0, 0.01], [0.01, 0.01]]])
+
+    const wps = useRouteStore.getState().route.waypoints
+    expect(wps[0].path).toBeNull()
+    expect(wps[1].path).toEqual([[0, 0], [0, 0.01], [0.01, 0.01]])
+    // Derived data: no history, so undo still targets a real edit.
+    expect(useRouteStore.getState().past.length).toBe(before)
+  })
+
+  it('clears all paths when given an empty list', () => {
+    useRouteStore.getState().applyRoutedPaths([[[0, 0], [1, 1]]])
+    useRouteStore.getState().applyRoutedPaths([])
+    expect(useRouteStore.getState().route.waypoints.every((wp) => wp.path == null)).toBe(true)
+  })
+
+  it('drops the routed path on both legs touching a dragged waypoint', () => {
+    // Route a->b, then a third point so 'b' has an incoming and outgoing leg.
+    useRouteStore.getState().addWaypoint(0.02, 0.02)
+    useRouteStore.getState().applyRoutedPaths([
+      [[0, 0], [0, 0.01]],
+      [[0, 0.01], [0.02, 0.02]],
+    ])
+    expect(useRouteStore.getState().route.waypoints[1].path).not.toBeNull()
+
+    useRouteStore.getState().moveWaypoint('b', 0.005, 0.005)
+    const wps = useRouteStore.getState().route.waypoints
+    // 'b' is index 1: its own (incoming) path and index 2's (outgoing) path clear.
+    expect(wps[1].path).toBeNull()
+    expect(wps[2].path).toBeNull()
+  })
+
+  it('does not persist routed paths as an edit that bumps updatedAt into history', () => {
+    putRoute.mockClear()
+    useRouteStore.getState().applyRoutedPaths([[[0, 0], [1, 1]]])
+    vi.runAllTimers()
+    // It persists (so a reload keeps the geometry) but takes no undo step.
+    expect(putRoute).toHaveBeenCalled()
+    expect(useRouteStore.getState().future).toEqual([])
+  })
+})

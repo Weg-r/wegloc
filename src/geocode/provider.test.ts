@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { geocodeCacheKey, makeProvider, parseNominatim } from './provider'
+import { geocodeCacheKey, makeProvider, parseNominatim, parseNominatimSearch, searchUrl } from './provider'
 
 describe('geocodeCacheKey', () => {
   it('rounds so nearby points share a key', () => {
@@ -48,5 +48,34 @@ describe('parseNominatim', () => {
     expect(parseNominatim(null)).toBeNull()
     expect(parseNominatim({})).toBeNull()
     expect(parseNominatim('nope')).toBeNull()
+  })
+})
+
+describe('searchUrl', () => {
+  it('substitutes and encodes the query', () => {
+    expect(searchUrl('https://geo.test/search?q={q}', 'Parking EFREI')).toBe(
+      'https://geo.test/search?q=Parking%20EFREI',
+    )
+  })
+})
+
+describe('parseNominatimSearch', () => {
+  it('maps results to lng/lat/label', () => {
+    const results = parseNominatimSearch([
+      { lat: '48.7871', lon: '2.3626', display_name: 'EFREI, Villejuif' },
+      { lat: '48.85', lon: '2.29', name: 'Somewhere' },
+    ])
+    expect(results).toHaveLength(2)
+    expect(results[0]).toEqual({ lng: 2.3626, lat: 48.7871, label: 'EFREI, Villejuif' })
+    expect(results[1].label).toBe('Somewhere')
+  })
+
+  it('skips malformed entries', () => {
+    expect(parseNominatimSearch([{ lat: 'x', lon: '1', display_name: 'a' }, { display_name: 'b' }])).toEqual([])
+  })
+
+  it('returns [] for non-arrays', () => {
+    expect(parseNominatimSearch(null)).toEqual([])
+    expect(parseNominatimSearch({})).toEqual([])
   })
 })

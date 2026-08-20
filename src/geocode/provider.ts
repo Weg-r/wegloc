@@ -13,6 +13,13 @@ export interface GeocodeProvider {
   parse: (payload: unknown) => string | null
 }
 
+/** A place found by searching an address string. */
+export interface GeocodeResult {
+  lng: number
+  lat: number
+  label: string
+}
+
 /** Rounded so two waypoints a few metres apart share a cache entry (~11m at 4 dp). */
 export function geocodeCacheKey(lng: number, lat: number): string {
   return `${lat.toFixed(4)},${lng.toFixed(4)}`
@@ -55,4 +62,28 @@ export function makeProvider(template: string): GeocodeProvider {
 export function configuredProvider(): GeocodeProvider | null {
   const template = import.meta.env.VITE_GEOCODE_URL as string | undefined
   return template ? makeProvider(template) : null
+}
+
+/**
+ * Turns a Nominatim search response (an array of places) into results. Each
+ * carries a coordinate and a display label. Malformed entries are skipped.
+ */
+export function parseNominatimSearch(payload: unknown): GeocodeResult[] {
+  if (!Array.isArray(payload)) return []
+  const results: GeocodeResult[] = []
+  for (const item of payload) {
+    if (typeof item !== 'object' || item === null) continue
+    const p = item as Record<string, unknown>
+    const lat = Number(p.lat)
+    const lng = Number(p.lon)
+    const label = typeof p.display_name === 'string' ? p.display_name : typeof p.name === 'string' ? p.name : ''
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !label) continue
+    results.push({ lng, lat, label })
+  }
+  return results
+}
+
+/** Builds a search URL from a template holding `{q}`. */
+export function searchUrl(template: string, query: string): string {
+  return template.replaceAll('{q}', encodeURIComponent(query))
 }

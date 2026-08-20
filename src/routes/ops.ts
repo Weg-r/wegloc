@@ -1,4 +1,4 @@
-import { haversineDistance, interpolatePosition } from './geo'
+import { haversineDistance, interpolatePosition, pathLengthMeters } from './geo'
 import type { Waypoint } from '../types/route'
 
 /**
@@ -114,11 +114,15 @@ export function isValidCoordinate(lng: number, lat: number): boolean {
   return Number.isFinite(lng) && Number.isFinite(lat) && lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90
 }
 
-/** Sum of the great-circle leg lengths, meters. Zero for a route with under two waypoints. */
+/**
+ * Sum of the leg lengths, meters: the routed polyline where a leg has one, else
+ * the straight great-circle line. Zero for a route with under two waypoints.
+ */
 export function totalDistanceMeters(waypoints: Waypoint[]): number {
   let total = 0
   for (let i = 0; i < waypoints.length - 1; i++) {
-    total += haversineDistance(waypoints[i], waypoints[i + 1])
+    const path = waypoints[i + 1].path
+    total += path && path.length >= 2 ? pathLengthMeters(path) : haversineDistance(waypoints[i], waypoints[i + 1])
   }
   return total
 }

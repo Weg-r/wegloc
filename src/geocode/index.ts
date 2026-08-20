@@ -1,7 +1,15 @@
 import { getGeocodeCache, putGeocodeCache } from '../db'
-import { configuredProvider, geocodeCacheKey, type GeocodeProvider } from './provider'
+import {
+  configuredProvider,
+  geocodeCacheKey,
+  parseNominatimSearch,
+  searchUrl,
+  type GeocodeProvider,
+  type GeocodeResult,
+} from './provider'
 
 export { geocodeCacheKey } from './provider'
+export type { GeocodeResult } from './provider'
 
 /**
  * The one place that reverse-geocodes: the only module that fetches a place
@@ -18,9 +26,31 @@ const MIN_REQUEST_GAP_MS = 1100
 
 export type GeocodeStatus = 'idle' | 'working' | 'offline'
 
-/** Whether a provider is configured at all, so the UI can hide the toggle when it isn't. */
+/** Whether a reverse-geocoding provider is configured, so the UI can hide the toggle when it isn't. */
 export function geocodingAvailable(): boolean {
   return configuredProvider() !== null
+}
+
+/** Whether address search is configured, so the UI can show or hide the search box. */
+export function addressSearchAvailable(): boolean {
+  return Boolean(import.meta.env.VITE_GEOCODE_SEARCH_URL)
+}
+
+/**
+ * Finds places matching an address string. Returns [] when search is not
+ * configured or nothing matched; throws only on a network failure. Rate-limited
+ * through the same queue as reverse geocoding.
+ */
+export async function searchAddress(query: string): Promise<GeocodeResult[]> {
+  const template = import.meta.env.VITE_GEOCODE_SEARCH_URL as string | undefined
+  const q = query.trim()
+  if (!template || !q) return []
+
+  return enqueue(async () => {
+    const response = await fetch(searchUrl(template, q), { headers: { Accept: 'application/json' } })
+    if (!response.ok) throw new Error(`Address search responded ${response.status}`)
+    return parseNominatimSearch(await response.json())
+  })
 }
 
 let lastRequestAt = 0

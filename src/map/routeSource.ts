@@ -4,16 +4,41 @@ import type { TrackPoint, Waypoint } from '../types/route'
 import { unwrapLongitude } from '../routes/geo'
 
 /**
+ * The route's ground geometry as raw [lng, lat] pairs: the routed polyline for
+ * each leg that has one, else a straight hop to the next waypoint. This is what
+ * the drawn line and the fit-bounds follow.
+ */
+function routeCoordinates(waypoints: Waypoint[]): [number, number][] {
+  if (waypoints.length === 0) return []
+  const coords: [number, number][] = [[waypoints[0].lng, waypoints[0].lat]]
+
+  for (let i = 1; i < waypoints.length; i++) {
+    const path = waypoints[i].path
+    if (path && path.length >= 2) {
+      // Skip the path's first point if it repeats where the previous leg ended.
+      for (let j = 0; j < path.length; j++) {
+        const last = coords[coords.length - 1]
+        if (j === 0 && last && last[0] === path[j][0] && last[1] === path[j][1]) continue
+        coords.push([path[j][0], path[j][1]])
+      }
+    } else {
+      coords.push([waypoints[i].lng, waypoints[i].lat])
+    }
+  }
+  return coords
+}
+
+/**
  * Longitudes made continuous so the drawn line never jumps ~358 degrees across
  * the antimeridian and takes the long way around the globe. A resulting value
  * may sit outside [-180, 180]; MapLibre renders it on the correct world copy.
  */
-function unwrapLongitudes(waypoints: Waypoint[]): [number, number][] {
+function unwrapLongitudes(coords: [number, number][]): [number, number][] {
   let previous: number | null = null
-  return waypoints.map((wp) => {
-    const lng = previous === null ? wp.lng : unwrapLongitude(previous, wp.lng)
-    previous = lng
-    return [lng, wp.lat]
+  return coords.map(([lng, lat]) => {
+    const next = previous === null ? lng : unwrapLongitude(previous, lng)
+    previous = next
+    return [next, lat]
   })
 }
 
@@ -23,7 +48,7 @@ export function waypointsToLine(waypoints: Waypoint[]): Feature<LineString> {
     properties: {},
     geometry: {
       type: 'LineString',
-      coordinates: unwrapLongitudes(waypoints),
+      coordinates: unwrapLongitudes(routeCoordinates(waypoints)),
     },
   }
 }
@@ -77,7 +102,7 @@ export function boundsForWaypoints(
 ): { bbox: [number, number, number, number]; point?: [number, number] } | null {
   if (waypoints.length === 0) return null
 
-  const coords = unwrapLongitudes(waypoints)
+  const coords = unwrapLongitudes(waypoints.map((wp) => [wp.lng, wp.lat] as [number, number]))
   if (coords.length === 1) return { bbox: [coords[0][0], coords[0][1], coords[0][0], coords[0][1]], point: coords[0] }
 
   let west = Infinity

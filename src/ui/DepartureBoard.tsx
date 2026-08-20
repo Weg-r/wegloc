@@ -4,6 +4,8 @@ import { ACCENT } from '../lib/theme'
 import { formatClock } from '../lib/format'
 import { SPEED_UNITS, formatSpeed, speedFromMps, speedToMps, speedUnitLabel, type SpeedUnit } from '../lib/units'
 import type { GeocodeStatus } from '../geocode'
+import type { RoutingStatus } from '../app/routing'
+import type { TravelMode } from '../routing'
 
 interface DepartureBoardProps {
   settings: SimulationSettings
@@ -30,6 +32,11 @@ interface DepartureBoardProps {
   geocodeEnabled: boolean
   onToggleGeocode: () => void
   geocodeStatus: GeocodeStatus
+  routerAvailable: boolean
+  roadFollowing: boolean
+  onToggleRoadFollowing: () => void
+  routingStatus: RoutingStatus
+  travelMode: TravelMode
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -75,6 +82,11 @@ export default function DepartureBoard({
   geocodeEnabled,
   onToggleGeocode,
   geocodeStatus,
+  routerAvailable,
+  roadFollowing,
+  onToggleRoadFollowing,
+  routingStatus,
+  travelMode,
 }: DepartureBoardProps) {
   const speedStep = speedUnit === 'mps' ? 0.1 : 1
   const unit = speedUnitLabel(speedUnit)
@@ -99,6 +111,36 @@ export default function DepartureBoard({
           ))}
         </div>
       </div>
+
+      {routerAvailable && (
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+            Route on roads · {travelMode}
+          </span>
+          <div className="flex items-center gap-2">
+            {roadFollowing && routingStatus === 'offline' && (
+              <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-400">Offline</span>
+            )}
+            {roadFollowing && routingStatus === 'noroute' && (
+              <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-400">No route</span>
+            )}
+            {roadFollowing && routingStatus === 'working' && (
+              <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-400">Routing…</span>
+            )}
+            <button
+              type="button"
+              onClick={onToggleRoadFollowing}
+              aria-pressed={roadFollowing}
+              className={`px-2 py-1 border-2 font-mono text-xs font-bold uppercase tracking-wide ${
+                roadFollowing ? 'text-neutral-950' : 'border-neutral-700 text-neutral-400 hover:border-neutral-500'
+              }`}
+              style={roadFollowing ? { backgroundColor: ACCENT, borderColor: ACCENT } : undefined}
+            >
+              {roadFollowing ? 'On' : 'Off'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
         <Field label={`Base speed (${unit})`}>

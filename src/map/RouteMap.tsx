@@ -35,6 +35,8 @@ interface RouteMapProps {
   current: TrackPoint | null
   /** While true, the marker is driven imperatively by the playback engine, not by `current`. */
   playing: boolean
+  /** When true, clicking the map does not add or insert waypoints; they come from address search. */
+  addByAddressOnly: boolean
 }
 
 /**
@@ -42,7 +44,7 @@ interface RouteMapProps {
  * interaction (add / select / drag a waypoint). The only place in the app
  * that touches maplibre-gl.
  */
-const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ current, playing }, ref) {
+const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ current, playing, addByAddressOnly }, ref) {
   const route = useRouteStore((s) => s.route)
   const selectedWaypointId = useRouteStore((s) => s.selectedWaypointId)
   const addWaypoint = useRouteStore((s) => s.addWaypoint)
@@ -60,6 +62,8 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
   })
 
   const draggingId = useRef<string | null>(null)
+  const addressOnlyRef = useRef(addByAddressOnly)
+  addressOnlyRef.current = addByAddressOnly
 
   useImperativeHandle(ref, () => ({
     flyTo: (lng, lat) => {
@@ -144,6 +148,10 @@ const RouteMap = forwardRef<RouteMapHandle, RouteMapProps>(function RouteMap({ c
     }
 
     const handleMapClick = (e: MapMouseEvent) => {
+      // With address-only adding, the map neither appends nor inserts; stations
+      // come from the address search. Selecting and dragging still work.
+      if (addressOnlyRef.current) return
+
       // A click on an existing waypoint is a selection, handled below. A click on
       // the line splits that leg, which is how a waypoint gets inserted into the
       // middle of a route. Anywhere else appends.

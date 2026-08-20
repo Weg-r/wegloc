@@ -51,6 +51,17 @@ function asNumberOr(value: unknown, fallback: number, path: string): number {
   return asNumber(value, path)
 }
 
+/** A routed leg polyline, or null. Each element must be a [lng, lat] pair of finite numbers. */
+function asPath(value: unknown, path: string): [number, number][] | null {
+  if (value === undefined || value === null) return null
+  const arr = asArray(value, path)
+  return arr.map((pair, i) => {
+    const p = asArray(pair, `${path}[${i}]`)
+    if (p.length !== 2) fail(`${path}[${i}]`, 'a [lng, lat] pair')
+    return [asNumber(p[0], `${path}[${i}][0]`), asNumber(p[1], `${path}[${i}][1]`)]
+  })
+}
+
 function asString(value: unknown, path: string): string {
   if (typeof value !== 'string') fail(path, 'a string')
   return value
@@ -106,6 +117,7 @@ function readWaypointV1(value: unknown, path: string): Waypoint {
     dwellMs: asNullableNumber(wp.dwellMs, `${path}.dwellMs`),
     // Optional: a bundle written before labels existed simply has none.
     label: typeof wp.label === 'string' ? wp.label : null,
+    path: asPath(wp.path, `${path}.path`),
   }
 }
 

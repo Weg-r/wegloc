@@ -80,7 +80,12 @@ describe('round trip', () => {
     expect(imported.settings).toEqual(route.settings)
     expect(imported.createdAt).toBe(route.createdAt)
     expect(imported.waypoints).toEqual(
-      route.waypoints.map((wp) => ({ ...wp, dwellMs: wp.dwellMs ?? null, label: wp.label ?? null })),
+      route.waypoints.map((wp) => ({
+        ...wp,
+        dwellMs: wp.dwellMs ?? null,
+        label: wp.label ?? null,
+        path: wp.path ?? null,
+      })),
     )
   })
 
@@ -89,6 +94,25 @@ describe('round trip', () => {
     const imported = readBundle(routeToBundle(labelled, EXPORTED_AT))
     expect(imported.waypoints[0].label).toBe('Home')
     expect(imported.waypoints[1].label).toBeNull()
+  })
+
+  it('keeps a routed leg path, and defaults it to null when absent', () => {
+    const routed = {
+      ...CHAMP_DE_MARS,
+      waypoints: CHAMP_DE_MARS.waypoints.map((wp, i) =>
+        i === 1 ? { ...wp, path: [[2.29, 48.85], [2.295, 48.856], [2.2977, 48.8557]] as [number, number][] } : wp,
+      ),
+    }
+    const imported = readBundle(routeToBundle(routed, EXPORTED_AT))
+    expect(imported.waypoints[1].path).toEqual([[2.29, 48.85], [2.295, 48.856], [2.2977, 48.8557]])
+    expect(imported.waypoints[0].path).toBeNull()
+  })
+
+  it('rejects a malformed path element', () => {
+    const bundle = routeToBundle(CHAMP_DE_MARS, EXPORTED_AT) as unknown as Record<string, never>
+    // @ts-expect-error deliberately malformed
+    bundle.route.waypoints[1].path = [[1, 2], [3]]
+    expect(() => readBundle(bundle)).toThrow(/path\[1\]/)
   })
 
   it('keeps dwell, altitude and leg speed exactly', () => {

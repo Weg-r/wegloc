@@ -28,6 +28,8 @@ export function routeToBundle(route: Route, exportedAt: number): ExportBundleV1 
           legSpeedMps: wp.legSpeedMps,
           dwellMs: wp.dwellMs ?? null,
           label: wp.label ?? null,
+          // Copied element-by-element so the bundle never holds a reference into the route.
+          path: wp.path ? wp.path.map(([lng, lat]) => [lng, lat] as [number, number]) : null,
         }),
       ),
       settings: {

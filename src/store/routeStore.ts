@@ -19,6 +19,7 @@ import {
 } from '../routes/ops'
 import type { ImportedRoute } from '../export/read'
 import { isSpeedUnit, type SpeedUnit } from '../lib/units'
+import type { TravelMode } from '../routing'
 import { DEFAULT_SETTINGS, type Route, type SimulationSettings, type Waypoint } from '../types/route'
 
 /**
@@ -35,6 +36,24 @@ const COALESCE_WINDOW_MS = 800
 
 const SPEED_UNIT_KEY = 'wegloc:speed-unit'
 const GEOCODE_KEY = 'wegloc:geocode-enabled'
+const ROAD_FOLLOWING_KEY = 'wegloc:road-following'
+
+function readRoadFollowing(): boolean {
+  try {
+    // On by default: if the user configured a router, they want roads followed.
+    return window.localStorage.getItem(ROAD_FOLLOWING_KEY) !== 'false'
+  } catch {
+    return true
+  }
+}
+
+function writeRoadFollowing(enabled: boolean): void {
+  try {
+    window.localStorage.setItem(ROAD_FOLLOWING_KEY, String(enabled))
+  } catch {
+    // Storage disabled; resets next session.
+  }
+}
 
 function readGeocodeEnabled(): boolean {
   try {
@@ -112,6 +131,10 @@ interface RouteState {
   speedUnit: SpeedUnit
   /** Whether to reverse-geocode waypoint names. Off by default; a UI preference, never sent in a bundle. */
   geocodeEnabled: boolean
+  /** Whether legs follow real roads (when a router is configured). A UI preference. */
+  roadFollowing: boolean
+  /** Travel profile for routing and default speeds. */
+  travelMode: TravelMode
 
   past: Route[]
   future: Route[]
@@ -147,6 +170,9 @@ interface RouteState {
   setSpeedMultiplier: (multiplier: number) => void
   setSpeedUnit: (unit: SpeedUnit) => void
   setGeocodeEnabled: (enabled: boolean) => void
+  setRoadFollowing: (enabled: boolean) => void
+  /** Applies routed leg polylines (one per leg, aligned to legs). Derived data: no history, quiet persist. */
+  applyRoutedPaths: (paths: ([number, number][] | null)[]) => void
 
   /** Persists now, cancelling any pending debounced write. Call on gesture end, not mid-drag. */
   persist: () => void
@@ -260,6 +286,8 @@ export const useRouteStore = create<RouteState>((set, get) => {
     libraryVersion: 0,
     speedUnit: readSpeedUnit(),
     geocodeEnabled: readGeocodeEnabled(),
+    roadFollowing: readRoadFollowing(),
+    travelMode: 'car',
     past: [],
     future: [],
 
@@ -276,12 +304,18 @@ export const useRouteStore = create<RouteState>((set, get) => {
 
     // Deliberately does not persist or snapshot: this fires dozens of times per
     // second during a drag. The write and the undo entry belong to the gesture,
-    // and are handled in beginDrag / endDrag.
+    // and are handled in beginDrag / endDrag. Both legs touching the moved
+    // waypoint drop their routed path -- it no longer connects -- so the drag
+    // shows straight lines until routing catches up on release.
     moveWaypoint: (id, lng, lat) =>
       set((state) => ({
         route: {
           ...state.route,
-          waypoints: state.route.waypoints.map((wp) => (wp.id === id ? { ...wp, lng, lat } : wp)),
+          waypoints: state.route.waypoints.map((wp, i, arr) => {
+            if (wp.id === id) return { ...wp, lng, lat, path: null }
+            if (arr[i - 1]?.id === id) return { ...wp, path: null }
+            return wp
+          }),
         },
       })),
 
@@ -475,6 +509,25 @@ export const useRouteStore = create<RouteState>((set, get) => {
     setGeocodeEnabled: (enabled) => {
       writeGeocodeEnabled(enabled)
       set({ geocodeEnabled: enabled })
+    },
+
+    setRoadFollowing: (enabled) => {
+      writeRoadFollowing(enabled)
+      set({ roadFollowing: enabled })
+    },
+
+    applyRoutedPaths: (paths) => {
+      set((state) => ({
+        route: {
+          ...state.route,
+          waypoints: state.route.waypoints.map((wp, i) =>
+            i === 0 ? { ...wp, path: null } : { ...wp, path: paths[i - 1] ?? null },
+          ),
+        },
+      }))
+      // Routed geometry is derived and cached, not an edit: it is persisted so a
+      // reload keeps it, but it earns no undo step and no updatedAt bump.
+      get().schedulePersist()
     },
 
     persist: () => persistNow(false),
