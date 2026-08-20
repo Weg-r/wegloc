@@ -104,3 +104,28 @@ export async function reverseGeocode(lng: number, lat: number): Promise<string |
   })
   return label
 }
+
+async function fetchPlace(provider: SearchProvider, query: string): Promise<FoundPlace | null> {
+  const response = await fetch(provider.url(query), { headers: { Accept: 'application/json' } })
+  if (!response.ok) throw new Error(`Geocoder responded ${response.status}`)
+  return provider.parse(await response.json())
+}
+
+/**
+ * The place behind an address, or null when the geocoder knows of none.
+ *
+ * Deliberately not cached. A reverse lookup is asked the same question over and
+ * over — every waypoint of every route, forever — which is what the cache is
+ * for. An address is typed once by a person who is about to see the answer on
+ * the map; storing it would grow the database for no second read.
+ *
+ * Shares the outgoing queue with the reverse lookups, so a search typed while
+ * names are resolving still respects the one-request-a-second policy rather than
+ * jumping the line.
+ */
+export async function searchPlace(query: string): Promise<FoundPlace | null> {
+  const provider = configuredSearchProvider()
+  const trimmed = query.trim()
+  if (!provider || !trimmed) return null
+  return enqueue(() => fetchPlace(provider, trimmed))
+}

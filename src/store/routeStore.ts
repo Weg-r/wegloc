@@ -139,7 +139,8 @@ interface RouteState {
   past: Route[]
   future: Route[]
 
-  addWaypoint: (lng: number, lat: number) => void
+  /** `label` names the station up front, for a waypoint that came from an address. */
+  addWaypoint: (lng: number, lat: number, label?: string) => void
   moveWaypoint: (id: string, lng: number, lat: number) => void
   updateWaypoint: (id: string, patch: Partial<Omit<Waypoint, 'id'>>) => void
   removeWaypoint: (id: string) => void
@@ -291,13 +292,23 @@ export const useRouteStore = create<RouteState>((set, get) => {
     past: [],
     future: [],
 
-    addWaypoint: (lng, lat) => {
+    addWaypoint: (lng, lat, label) => {
       if (!isValidCoordinate(lng, lat)) return
       commit((route) => ({
         ...route,
         waypoints: [
           ...route.waypoints,
-          { id: createId(), lng, lat, altitude: null, legSpeedMps: null, dwellMs: null },
+          {
+            id: createId(),
+            lng,
+            lat,
+            altitude: null,
+            legSpeedMps: null,
+            dwellMs: null,
+            // Named only when it came in named. An empty string would read as a
+            // label the user chose, and stop the reverse lookup ever running.
+            ...(label?.trim() ? { label: label.trim() } : {}),
+          },
         ],
       }))
     },

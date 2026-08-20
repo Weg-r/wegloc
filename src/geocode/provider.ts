@@ -6,6 +6,11 @@
  * The provider is configured with a URL template holding `{lat}` and `{lng}`.
  * A Nominatim reverse endpoint looks like:
  *   https://nominatim.example.org/reverse?format=jsonv2&lat={lat}&lon={lng}
+ *
+ * Looking an address up is the same shape in the other direction, configured
+ * separately because it is a different endpoint and a build may want one without
+ * the other. A Nominatim search endpoint looks like:
+ *   https://nominatim.example.org/search?format=jsonv2&limit=1&q={q}
  */
 
 export interface GeocodeProvider {
@@ -19,7 +24,6 @@ export interface GeocodeResult {
   lat: number
   label: string
 }
-
 /** Rounded so two waypoints a few metres apart share a cache entry (~11m at 4 dp). */
 export function geocodeCacheKey(lng: number, lat: number): string {
   return `${lat.toFixed(4)},${lng.toFixed(4)}`
