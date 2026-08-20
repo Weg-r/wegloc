@@ -31,6 +31,8 @@ export interface BundleWaypointV1 {
   legSpeedMps: number | null
   /** Time held stationary here, in milliseconds. null for no stop. */
   dwellMs: number | null
+  /** User-typed name for the waypoint. Optional; added after the first bundles shipped. */
+  label?: string | null
 }
 
 export interface BundleSettingsV1 {

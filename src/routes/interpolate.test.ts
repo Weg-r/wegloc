@@ -175,6 +175,36 @@ describe('buildTrack: jitter', () => {
   })
 })
 
+describe('buildTrack: routed leg path', () => {
+  const start = wp({ lng: 0, lat: 0 })
+  // A dog-leg path from start to end: north then east, longer than the straight line.
+  const routed = wp({ lng: 0.02, lat: 0, path: [[0, 0], [0, 0.02], [0.02, 0.02], [0.02, 0]] })
+
+  it('uses the polyline length for the duration, not the straight line', () => {
+    const straight = trackDurationMs(buildTrack(route([start, wp({ lng: 0.02, lat: 0 })], { baseSpeedMps: 5 })))
+    const alongRoad = trackDurationMs(buildTrack(route([start, routed], { baseSpeedMps: 5 })))
+    expect(alongRoad).toBeGreaterThan(straight)
+  })
+
+  it('places samples on the polyline, off the straight line', () => {
+    const track = buildTrack(route([start, routed], { baseSpeedMps: 5 }))
+    // A straight track would keep lat at ~0; the routed one climbs north first.
+    expect(Math.max(...track.map((p) => p.lat))).toBeGreaterThan(0.01)
+  })
+
+  it('ends at the final waypoint', () => {
+    const track = buildTrack(route([start, routed], { baseSpeedMps: 5 }))
+    expect(track.at(-1)?.lng).toBeCloseTo(0.02, 4)
+    expect(track.at(-1)?.lat).toBeCloseTo(0, 4)
+  })
+
+  it('ignores a degenerate one-point path and falls back to straight', () => {
+    const bad = wp({ lng: 0.02, lat: 0, path: [[0, 0]] })
+    const track = buildTrack(route([start, bad], { baseSpeedMps: 5 }))
+    expect(track.at(-1)?.lng).toBeCloseTo(0.02, 6)
+  })
+})
+
 describe('buildTrack: speed profile', () => {
   // Two ~360m legs, straight, with a car-like profile.
   const P = wp({ lng: 0, lat: 0 })

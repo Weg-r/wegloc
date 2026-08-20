@@ -2,16 +2,21 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { useRouteStore } from '../store/routeStore'
 import { useTrack, useCurrentPosition } from '../store/hooks'
 import { trackDurationMs } from '../routes/interpolate'
+import { totalDistanceMeters } from '../routes/ops'
+import { SPEED_UNITS } from '../lib/units'
 import { useFlushPendingWrites, useHydrateFromDb, useRememberLastOpened } from './hydrate'
 import { useRouteLibrary } from './library'
 import { useUndoRedoShortcuts } from './shortcuts'
 import { usePlaybackEngine } from './playback'
+import { useGeocodedLabels } from './geocoding'
+import { geocodingAvailable } from '../geocode'
 import { downloadRoute, pickRouteFile, readRouteFile } from './routeFile'
 import { FIXTURES_ENABLED, loadFixtures } from '../db/fixtures'
 import RouteMap, { type RouteMapHandle } from '../map/RouteMap'
 import LineCard from '../ui/LineCard'
 import DepartureBoard from '../ui/DepartureBoard'
 import RouteBar from '../ui/RouteBar'
+import SummaryStrip from '../ui/SummaryStrip'
 import WaypointTools from '../ui/WaypointTools'
 import { ACCENT } from '../lib/theme'
 
@@ -35,6 +40,11 @@ export default function App() {
   const setPlaying = useRouteStore((s) => s.setPlaying)
   const setPlaybackTime = useRouteStore((s) => s.setPlaybackTime)
   const setSpeedMultiplier = useRouteStore((s) => s.setSpeedMultiplier)
+  const speedUnit = useRouteStore((s) => s.speedUnit)
+  const setSpeedUnit = useRouteStore((s) => s.setSpeedUnit)
+  const geocodeEnabled = useRouteStore((s) => s.geocodeEnabled)
+  const setGeocodeEnabled = useRouteStore((s) => s.setGeocodeEnabled)
+  const dragging = useRouteStore((s) => s.draggingWaypointId !== null)
   const addWaypoint = useRouteStore((s) => s.addWaypoint)
   const reorderWaypoint = useRouteStore((s) => s.reorderWaypoint)
   const reverseRoute = useRouteStore((s) => s.reverseRoute)
@@ -61,6 +71,18 @@ export default function App() {
     () => route.waypoints.find((wp) => wp.id === selectedWaypointId) ?? null,
     [route.waypoints, selectedWaypointId],
   )
+
+  const distanceMeters = useMemo(() => totalDistanceMeters(route.waypoints), [route.waypoints])
+  const geocodeAvailable = useMemo(() => geocodingAvailable(), [])
+  const { labels: geocodedLabels, status: geocodeStatus } = useGeocodedLabels(
+    route.waypoints,
+    geocodeEnabled && geocodeAvailable,
+    dragging,
+  )
+  const cycleUnit = useCallback(() => {
+    const next = SPEED_UNITS[(SPEED_UNITS.indexOf(speedUnit) + 1) % SPEED_UNITS.length]
+    setSpeedUnit(next)
+  }, [speedUnit, setSpeedUnit])
 
   const mapHandleRef = useRef<RouteMapHandle>(null)
   const canPlay = route.waypoints.length >= 2 && durationMs > 0
@@ -206,6 +228,14 @@ export default function App() {
           }
         />
 
+        <SummaryStrip
+          waypointCount={route.waypoints.length}
+          distanceMeters={distanceMeters}
+          durationMs={durationMs}
+          speedUnit={speedUnit}
+          onCycleUnit={cycleUnit}
+        />
+
         <LineCard
           waypoints={route.waypoints}
           settings={route.settings}
@@ -214,6 +244,8 @@ export default function App() {
           onDeselect={handleDeselect}
           onDelete={removeWaypoint}
           onReorder={reorderWaypoint}
+          speedUnit={speedUnit}
+          geocodedLabels={geocodedLabels}
         />
 
         <WaypointTools
@@ -244,6 +276,12 @@ export default function App() {
           follow={follow}
           onToggleFollow={() => setFollow((f) => !f)}
           onFit={() => mapHandleRef.current?.fitRoute(useRouteStore.getState().route.waypoints)}
+          speedUnit={speedUnit}
+          onSetSpeedUnit={setSpeedUnit}
+          geocodeAvailable={geocodeAvailable}
+          geocodeEnabled={geocodeEnabled}
+          onToggleGeocode={() => setGeocodeEnabled(!geocodeEnabled)}
+          geocodeStatus={geocodeStatus}
         />
       </aside>
     </div>

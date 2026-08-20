@@ -1,4 +1,13 @@
-import { bearing, haversineDistance, interpolatePosition, normalizeLongitude, offsetMeters, unwrapLongitude } from './geo'
+import {
+  bearing,
+  haversineDistance,
+  interpolatePosition,
+  normalizeLongitude,
+  offsetMeters,
+  pathLengthMeters,
+  pointAlongPath,
+  unwrapLongitude,
+} from './geo'
 import { correlatedNoise } from './noise'
 import {
   planLegTimings,
@@ -134,13 +143,26 @@ export function buildTrack(route: Pick<Route, 'waypoints' | 'settings'>): TrackP
 
   const legCount = waypoints.length - 1
 
-  // Bearings once: reused for the leg heading, for the zero-length-leg fallback,
-  // and for measuring the turn at each vertex when the speed profile is on.
+  // A leg's road-following polyline, if one has been routed and it is usable.
+  const legPath = (i: number): [number, number][] | null => {
+    const path = waypoints[i + 1].path
+    return path && path.length >= 2 ? path : null
+  }
+
+  // Distance and heading once per leg: along the routed polyline where there is
+  // one, else the straight great-circle leg. Reused for the duration, the point
+  // heading, and the turn angle when the speed profile is on.
   const distances = new Array<number>(legCount)
   const legBearings = new Array<number>(legCount)
   for (let i = 0; i < legCount; i++) {
-    distances[i] = haversineDistance(waypoints[i], waypoints[i + 1])
-    legBearings[i] = distances[i] > 0 ? bearing(waypoints[i], waypoints[i + 1]) : (legBearings[i - 1] ?? 0)
+    const path = legPath(i)
+    if (path) {
+      distances[i] = pathLengthMeters(path)
+      legBearings[i] = bearing({ lng: path[0][0], lat: path[0][1] }, { lng: path[1][0], lat: path[1][1] })
+    } else {
+      distances[i] = haversineDistance(waypoints[i], waypoints[i + 1])
+      legBearings[i] = distances[i] > 0 ? bearing(waypoints[i], waypoints[i + 1]) : (legBearings[i - 1] ?? 0)
+    }
   }
 
   const cruiseFor = (legIndex: number): number =>
@@ -195,18 +217,28 @@ export function buildTrack(route: Pick<Route, 'waypoints' | 'settings'>): TrackP
     // contributes no time.
     if (durationMs === 0) continue
 
+    const path = legPath(i)
+    // Position and heading at fraction `f` of the leg: along the routed polyline
+    // if there is one (heading follows the road), else straight (heading is the
+    // leg bearing).
+    const at = (f: number): { lng: number; lat: number; bearingDeg: number } => {
+      if (path) return pointAlongPath(path, f)
+      const pos = interpolatePosition(from, to, f)
+      return { lng: pos.lng, lat: pos.lat, bearingDeg: legBearing }
+    }
+
     const steps = Math.max(1, Math.ceil(durationMs / tick))
     for (let s = 1; s <= steps; s++) {
       if (timing) {
         const tl = s < steps ? s * tick : durationMs
         const sample = sampleLegProfile(timing, distance, limits.maxAccelMps2, limits.maxDecelMps2, tl)
         const f = distance > 0 ? Math.min(1, sample.distance / distance) : 1
-        const pos = interpolatePosition(from, to, f)
-        push(pos.lng, pos.lat, altFrom + (altTo - altFrom) * f, sample.speedMps, legBearing, elapsed + tl)
+        const p = at(f)
+        push(p.lng, p.lat, altFrom + (altTo - altFrom) * f, sample.speedMps, p.bearingDeg, elapsed + tl)
       } else {
         const f = s / steps
-        const pos = interpolatePosition(from, to, f)
-        push(pos.lng, pos.lat, altFrom + (altTo - altFrom) * f, cruise, legBearing, elapsed + f * durationMs)
+        const p = at(f)
+        push(p.lng, p.lat, altFrom + (altTo - altFrom) * f, cruise, p.bearingDeg, elapsed + f * durationMs)
       }
     }
 

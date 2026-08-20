@@ -3,6 +3,8 @@ import { haversineDistance } from '../routes/geo'
 import type { SimulationSettings, Waypoint } from '../types/route'
 import { ACCENT } from '../lib/theme'
 import { formatMeters, formatSeconds, stationCode } from '../lib/format'
+import { speedFromMps, speedUnitLabel, type SpeedUnit } from '../lib/units'
+import { coordinateLabel, hasName, waypointLabel } from '../lib/waypointLabel'
 
 interface LineCardProps {
   waypoints: Waypoint[]
@@ -12,6 +14,8 @@ interface LineCardProps {
   onDeselect: () => void
   onDelete: (id: string) => void
   onReorder: (from: number, to: number) => void
+  speedUnit: SpeedUnit
+  geocodedLabels: Record<string, string>
 }
 
 interface LineRowProps {
@@ -24,6 +28,8 @@ interface LineRowProps {
   onSelect: (id: string) => void
   onDelete: (id: string) => void
   onReorder: (from: number, to: number) => void
+  speedUnit: SpeedUnit
+  geocoded: string | null
   registerRef: (id: string, node: HTMLButtonElement | null) => void
 }
 
@@ -45,10 +51,13 @@ const LineRow = memo(function LineRow({
   onSelect,
   onDelete,
   onReorder,
+  speedUnit,
+  geocoded,
   registerRef,
 }: LineRowProps) {
   const code = stationCode(index)
   const dwellMs = waypoint.dwellMs ?? 0
+  const named = hasName(waypoint, geocoded)
 
   return (
     <li className={`flex items-stretch transition-colors ${selected ? 'bg-neutral-100' : 'hover:bg-neutral-50'}`}>
@@ -57,7 +66,7 @@ const LineRow = memo(function LineRow({
         ref={(node) => registerRef(waypoint.id, node)}
         onClick={() => onSelect(waypoint.id)}
         aria-current={selected ? 'true' : undefined}
-        aria-label={`${code}, waypoint ${index + 1} of ${total}`}
+        aria-label={`${code}, ${waypointLabel(waypoint, geocoded)}, waypoint ${index + 1} of ${total}`}
         className="flex-1 min-w-0 flex items-stretch gap-3 pl-5 py-3 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-neutral-900"
       >
         <span className="flex flex-col items-center pt-0.5" aria-hidden="true">
@@ -73,8 +82,11 @@ const LineRow = memo(function LineRow({
             )}
           </span>
           <span className="block text-sm font-semibold text-neutral-900 truncate">
-            {waypoint.lat.toFixed(4)}, {waypoint.lng.toFixed(4)}
+            {waypointLabel(waypoint, geocoded)}
           </span>
+          {named && (
+            <span className="block font-mono text-[11px] text-neutral-400 truncate">{coordinateLabel(waypoint)}</span>
+          )}
           {dwellMs > 0 && (
             <span className="block font-mono text-xs font-bold mt-1 text-neutral-600">
               STOP {formatSeconds(dwellMs)}
@@ -82,7 +94,7 @@ const LineRow = memo(function LineRow({
           )}
           {legDistance !== null ? (
             <span className="block font-mono text-xs text-neutral-500 mt-1">
-              NEXT &rarr; {formatMeters(legDistance)} @ {legSpeed?.toFixed(1)} M/S
+              NEXT &rarr; {formatMeters(legDistance)} @ {legSpeed == null ? '—' : speedFromMps(legSpeed, speedUnit).toFixed(1)} {speedUnitLabel(speedUnit).toUpperCase()}
             </span>
           ) : (
             <span className="block font-mono text-xs font-bold mt-1" style={{ color: ACCENT }}>
@@ -136,6 +148,8 @@ export default function LineCard({
   onDeselect,
   onDelete,
   onReorder,
+  speedUnit,
+  geocodedLabels,
 }: LineCardProps) {
   // Recomputed once per waypoint change rather than once per row per render.
   const legDistances = useMemo(
@@ -235,6 +249,8 @@ export default function LineCard({
           onSelect={onSelect}
           onDelete={onDelete}
           onReorder={onReorder}
+          speedUnit={speedUnit}
+          geocoded={geocodedLabels[wp.id] ?? null}
           registerRef={registerRef}
         />
       ))}

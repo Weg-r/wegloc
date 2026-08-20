@@ -23,6 +23,14 @@ describe('formatClock', () => {
   it('clamps negatives rather than showing a minus', () => {
     expect(formatClock(-5000)).toBe('00:00')
   })
+
+  it('shows hours only once the clock reaches them', () => {
+    expect(formatClock(90 * 60_000)).toBe('1:30:00')
+    expect(formatClock(2 * 3_600_000)).toBe('2:00:00')
+    expect(formatClock(3_600_000 + 65_000)).toBe('1:01:05')
+    // Under an hour stays mm:ss.
+    expect(formatClock(59 * 60_000 + 59_000)).toBe('59:59')
+  })
 })
 
 describe('formatSeconds', () => {

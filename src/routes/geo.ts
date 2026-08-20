@@ -107,3 +107,50 @@ export function unwrapLongitude(reference: number, lng: number): number {
   const turns = Math.round((lng - reference) / 360)
   return lng - turns * 360
 }
+
+/** Total great-circle length of a polyline, meters. Zero for under two points. */
+export function pathLengthMeters(path: [number, number][]): number {
+  let total = 0
+  for (let i = 0; i < path.length - 1; i++) {
+    total += haversineDistance({ lng: path[i][0], lat: path[i][1] }, { lng: path[i + 1][0], lat: path[i + 1][1] })
+  }
+  return total
+}
+
+/**
+ * Position and heading at fraction `f` [0, 1] of a polyline's length. Walks the
+ * segments by arc length, so the point moves at constant speed along the drawn
+ * path and the bearing is that of the segment it currently sits on -- the
+ * realistic heading for a route that follows roads.
+ */
+export function pointAlongPath(
+  path: [number, number][],
+  f: number,
+): { lng: number; lat: number; bearingDeg: number } {
+  if (path.length === 0) return { lng: 0, lat: 0, bearingDeg: 0 }
+  if (path.length === 1) return { lng: path[0][0], lat: path[0][1], bearingDeg: 0 }
+
+  const total = pathLengthMeters(path)
+  const clamped = Math.min(Math.max(f, 0), 1)
+  if (total === 0) return { lng: path[0][0], lat: path[0][1], bearingDeg: 0 }
+
+  const target = clamped * total
+  let travelled = 0
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = { lng: path[i][0], lat: path[i][1] }
+    const b = { lng: path[i + 1][0], lat: path[i + 1][1] }
+    const segment = haversineDistance(a, b)
+    if (segment === 0) continue
+    if (travelled + segment >= target) {
+      const localF = (target - travelled) / segment
+      const pos = interpolatePosition(a, b, localF)
+      return { lng: pos.lng, lat: pos.lat, bearingDeg: bearing(a, b) }
+    }
+    travelled += segment
+  }
+
+  // Rounding overshoot: sit on the final segment's end.
+  const a = { lng: path[path.length - 2][0], lat: path[path.length - 2][1] }
+  const b = { lng: path[path.length - 1][0], lat: path[path.length - 1][1] }
+  return { lng: b.lng, lat: b.lat, bearingDeg: bearing(a, b) }
+}

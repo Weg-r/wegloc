@@ -104,6 +104,8 @@ function readWaypointV1(value: unknown, path: string): Waypoint {
     altitude: asNullableNumber(wp.altitude, `${path}.altitude`),
     legSpeedMps: asNullableNumber(wp.legSpeedMps, `${path}.legSpeedMps`),
     dwellMs: asNullableNumber(wp.dwellMs, `${path}.dwellMs`),
+    // Optional: a bundle written before labels existed simply has none.
+    label: typeof wp.label === 'string' ? wp.label : null,
   }
 }
 

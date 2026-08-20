@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { bearing, haversineDistance, interpolatePosition, normalizeLongitude, offsetMeters, unwrapLongitude } from './geo'
+import {
+  bearing,
+  haversineDistance,
+  interpolatePosition,
+  normalizeLongitude,
+  offsetMeters,
+  pathLengthMeters,
+  pointAlongPath,
+  unwrapLongitude,
+} from './geo'
 
 const PARIS = { lng: 2.3522, lat: 48.8566 }
 const LONDON = { lng: -0.1276, lat: 51.5072 }
@@ -115,5 +124,49 @@ describe('unwrapLongitude', () => {
         expect(Math.abs(unwrapLongitude(ref, lng) - ref)).toBeLessThanOrEqual(180 + 1e-9)
       }
     }
+  })
+})
+
+describe('pathLengthMeters', () => {
+  it('is zero for under two points', () => {
+    expect(pathLengthMeters([])).toBe(0)
+    expect(pathLengthMeters([[0, 0]])).toBe(0)
+  })
+
+  it('sums the segments', () => {
+    const straight = pathLengthMeters([[0, 0], [0, 0.01]])
+    const bent = pathLengthMeters([[0, 0], [0, 0.01], [0.01, 0.01]])
+    expect(bent).toBeGreaterThan(straight)
+    expect(straight).toBeCloseTo(haversineDistance({ lng: 0, lat: 0 }, { lng: 0, lat: 0.01 }), 6)
+  })
+})
+
+describe('pointAlongPath', () => {
+  const L: [number, number][] = [[0, 0], [0, 0.01], [0.01, 0.01]]
+
+  it('pins the ends', () => {
+    expect(pointAlongPath(L, 0)).toMatchObject({ lng: 0, lat: 0 })
+    const end = pointAlongPath(L, 1)
+    expect(end.lng).toBeCloseTo(0.01, 9)
+    expect(end.lat).toBeCloseTo(0.01, 9)
+  })
+
+  it('follows the polyline rather than cutting the corner', () => {
+    // Halfway by length lands on the first (vertical) segment near its top,
+    // not on the diagonal a straight interpolation would take.
+    const mid = pointAlongPath(L, 0.5)
+    expect(mid.lng).toBeCloseTo(0, 4)
+    expect(mid.lat).toBeGreaterThan(0.004)
+  })
+
+  it('reports the heading of the current segment', () => {
+    // On the first segment the heading is due north (0); on the second, due east (90).
+    expect(pointAlongPath(L, 0.1).bearingDeg).toBeCloseTo(0, 0)
+    expect(pointAlongPath(L, 0.9).bearingDeg).toBeCloseTo(90, 0)
+  })
+
+  it('clamps out-of-range fractions', () => {
+    expect(pointAlongPath(L, -1)).toMatchObject({ lng: 0, lat: 0 })
+    expect(pointAlongPath(L, 2).lat).toBeCloseTo(0.01, 9)
   })
 })

@@ -13,7 +13,8 @@
         "lat": 48.8584,
         "altitude": 33,
         "legSpeedMps": null,
-        "dwellMs": null
+        "dwellMs": null,
+        "label": null
       },
       {
         "id": "cdm-2",
@@ -21,7 +22,8 @@
         "lat": 48.8557,
         "altitude": 35,
         "legSpeedMps": 1.4,
-        "dwellMs": null
+        "dwellMs": null,
+        "label": null
       },
       {
         "id": "cdm-3",
@@ -29,7 +31,8 @@
         "lat": 48.8566,
         "altitude": 34,
         "legSpeedMps": 2.8,
-        "dwellMs": null
+        "dwellMs": null,
+        "label": null
       },
       {
         "id": "cdm-4",
@@ -37,7 +40,8 @@
         "lat": 48.86,
         "altitude": 36,
         "legSpeedMps": 1.4,
-        "dwellMs": null
+        "dwellMs": null,
+        "label": null
       },
       {
         "id": "cdm-5",
@@ -45,7 +49,8 @@
         "lat": 48.8607,
         "altitude": 34,
         "legSpeedMps": 1.1,
-        "dwellMs": null
+        "dwellMs": null,
+        "label": null
       }
     ],
     "settings": {

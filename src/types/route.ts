@@ -10,6 +10,20 @@ export interface Waypoint {
    * saved before stops existed read back unchanged. null or absent = no stop.
    */
   dwellMs?: number | null
+  /**
+   * A human name for this waypoint, typed by the user. Optional and additive.
+   * A reverse-geocoded name is never stored here -- that is derived, cached
+   * separately, and only fills in where this is absent.
+   */
+  label?: string | null
+  /**
+   * The road-following polyline for the leg arriving at this waypoint, as
+   * [lng, lat] pairs from the previous waypoint to this one. Absent means the
+   * leg is a straight great-circle line. It is derived from a routing service
+   * but stored on purpose: the device app must replay the exact path, and a
+   * routed route has to stay usable offline. The first waypoint never has one.
+   */
+  path?: [number, number][] | null
 }
 
 export type AltitudeMode = 'flat' | 'per-waypoint'

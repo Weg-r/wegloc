@@ -60,6 +60,8 @@ describe('backward compatibility', () => {
     expect(imported.settings.maxAccelMps2).toBe(0)
     expect(imported.settings.maxDecelMps2).toBe(0)
     expect(imported.settings.corneringMps2).toBe(0)
+    // Waypoints predate labels, so they default to null.
+    expect(imported.waypoints.every((wp) => wp.label === null)).toBe(true)
     // The rest of the settings still come through.
     expect(imported.settings.baseSpeedMps).toBeGreaterThan(0)
     expect(imported.waypoints.length).toBeGreaterThan(0)
@@ -78,8 +80,15 @@ describe('round trip', () => {
     expect(imported.settings).toEqual(route.settings)
     expect(imported.createdAt).toBe(route.createdAt)
     expect(imported.waypoints).toEqual(
-      route.waypoints.map((wp) => ({ ...wp, dwellMs: wp.dwellMs ?? null })),
+      route.waypoints.map((wp) => ({ ...wp, dwellMs: wp.dwellMs ?? null, label: wp.label ?? null })),
     )
+  })
+
+  it('keeps a manual label, and defaults it to null when absent', () => {
+    const labelled = { ...CHAMP_DE_MARS, waypoints: CHAMP_DE_MARS.waypoints.map((wp, i) => (i === 0 ? { ...wp, label: 'Home' } : wp)) }
+    const imported = readBundle(routeToBundle(labelled, EXPORTED_AT))
+    expect(imported.waypoints[0].label).toBe('Home')
+    expect(imported.waypoints[1].label).toBeNull()
   })
 
   it('keeps dwell, altitude and leg speed exactly', () => {

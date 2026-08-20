@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import type { SimulationSettings, TrackPoint, Waypoint } from '../types/route'
 import { ACCENT } from '../lib/theme'
 import { formatClock } from '../lib/format'
+import { SPEED_UNITS, formatSpeed, speedFromMps, speedToMps, speedUnitLabel, type SpeedUnit } from '../lib/units'
+import type { GeocodeStatus } from '../geocode'
 
 interface DepartureBoardProps {
   settings: SimulationSettings
@@ -22,6 +24,12 @@ interface DepartureBoardProps {
   follow: boolean
   onToggleFollow: () => void
   onFit: () => void
+  speedUnit: SpeedUnit
+  onSetSpeedUnit: (unit: SpeedUnit) => void
+  geocodeAvailable: boolean
+  geocodeEnabled: boolean
+  onToggleGeocode: () => void
+  geocodeStatus: GeocodeStatus
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -61,17 +69,47 @@ export default function DepartureBoard({
   follow,
   onToggleFollow,
   onFit,
+  speedUnit,
+  onSetSpeedUnit,
+  geocodeAvailable,
+  geocodeEnabled,
+  onToggleGeocode,
+  geocodeStatus,
 }: DepartureBoardProps) {
+  const speedStep = speedUnit === 'mps' ? 0.1 : 1
+  const unit = speedUnitLabel(speedUnit)
   return (
     <div className="bg-neutral-900 text-neutral-50 px-5 py-4 space-y-4" style={{ ['--accent' as string]: ACCENT }}>
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Speed unit</span>
+        <div className="flex gap-1 font-mono text-xs font-bold" role="group" aria-label="Speed unit">
+          {SPEED_UNITS.map((u) => (
+            <button
+              key={u}
+              type="button"
+              onClick={() => onSetSpeedUnit(u)}
+              aria-pressed={speedUnit === u}
+              className={`px-2 py-1 border-2 uppercase tracking-wide ${
+                speedUnit === u ? 'text-neutral-950' : 'border-neutral-700 text-neutral-400 hover:border-neutral-500'
+              }`}
+              style={speedUnit === u ? { backgroundColor: ACCENT, borderColor: ACCENT } : undefined}
+            >
+              {speedUnitLabel(u)}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-        <Field label="Base speed (m/s)">
+        <Field label={`Base speed (${unit})`}>
           <input
             type="number"
-            step={0.1}
-            min={0.1}
-            value={settings.baseSpeedMps}
-            onChange={(e) => onUpdateSettings({ baseSpeedMps: Math.max(0.1, Number(e.target.value)) })}
+            step={speedStep}
+            min={speedFromMps(0.1, speedUnit)}
+            value={Number(speedFromMps(settings.baseSpeedMps, speedUnit).toFixed(2))}
+            onChange={(e) =>
+              onUpdateSettings({ baseSpeedMps: Math.max(0.1, speedToMps(Number(e.target.value), speedUnit)) })
+            }
             className={inputClass}
           />
         </Field>
@@ -217,6 +255,32 @@ export default function DepartureBoard({
 
       {selected && (
         <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-t-2 border-neutral-800 pt-3">
+          <Field label="Name">
+            <input
+              type="text"
+              value={selected.label ?? ''}
+              placeholder="e.g. office"
+              onChange={(e) => onUpdateSelected({ label: e.target.value === '' ? null : e.target.value })}
+              className={inputClass}
+            />
+          </Field>
+          {geocodeAvailable ? (
+            <Field label="Auto-name (network)">
+              <button
+                type="button"
+                onClick={onToggleGeocode}
+                aria-pressed={geocodeEnabled}
+                className={`self-start px-2 py-1 border-2 font-mono font-bold text-sm uppercase tracking-wide ${
+                  geocodeEnabled ? 'text-neutral-950' : 'border-neutral-700 text-neutral-400 hover:border-neutral-500'
+                }`}
+                style={geocodeEnabled ? { backgroundColor: ACCENT, borderColor: ACCENT } : undefined}
+              >
+                {geocodeEnabled ? (geocodeStatus === 'offline' ? 'Offline' : 'On') : 'Off'}
+              </button>
+            </Field>
+          ) : (
+            <div />
+          )}
           <Field label={`${selected.id.slice(0, 6)} · altitude override (m)`}>
             <input
               type="number"
@@ -227,17 +291,19 @@ export default function DepartureBoard({
               className={inputClass}
             />
           </Field>
-          <Field label="Leg speed override (m/s)">
+          <Field label={`Leg speed override (${unit})`}>
             <input
               type="number"
-              step={0.1}
-              min={MIN_LEG_SPEED_MPS}
-              value={selected.legSpeedMps ?? ''}
+              step={speedStep}
+              min={speedFromMps(MIN_LEG_SPEED_MPS, speedUnit)}
+              value={selected.legSpeedMps == null ? '' : Number(speedFromMps(selected.legSpeedMps, speedUnit).toFixed(2))}
               placeholder="auto"
               onChange={(e) =>
                 onUpdateSelected({
                   legSpeedMps:
-                    e.target.value === '' ? null : Math.max(MIN_LEG_SPEED_MPS, Number(e.target.value)),
+                    e.target.value === ''
+                      ? null
+                      : Math.max(MIN_LEG_SPEED_MPS, speedToMps(Number(e.target.value), speedUnit)),
                 })
               }
               className={inputClass}
@@ -353,7 +419,7 @@ export default function DepartureBoard({
         <div className="grid grid-cols-3 gap-3 mt-3 font-mono text-xs">
           <div>
             <p className="text-neutral-500 uppercase tracking-widest text-[10px]">Speed</p>
-            <p className="font-bold text-base">{current ? `${current.speedMps.toFixed(1)} m/s` : '—'}</p>
+            <p className="font-bold text-base">{current ? formatSpeed(current.speedMps, speedUnit) : '—'}</p>
           </div>
           <div>
             <p className="text-neutral-500 uppercase tracking-widest text-[10px]">Altitude</p>

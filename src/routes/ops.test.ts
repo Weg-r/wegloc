@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   insertWaypoint,
+  totalDistanceMeters,
   isValidCoordinate,
   moveWaypointToIndex,
   nearestLegIndex,
@@ -148,5 +149,19 @@ describe('isValidCoordinate', () => {
     expect(isValidCoordinate(0, 91)).toBe(false)
     expect(isValidCoordinate(NaN, 0)).toBe(false)
     expect(isValidCoordinate(0, Infinity)).toBe(false)
+  })
+})
+
+describe('totalDistanceMeters', () => {
+  it('is zero for under two waypoints', () => {
+    expect(totalDistanceMeters([])).toBe(0)
+    expect(totalDistanceMeters([A])).toBe(0)
+  })
+
+  it('sums the legs', () => {
+    const two = totalDistanceMeters([A, B])
+    const three = totalDistanceMeters([A, B, C])
+    expect(three).toBeGreaterThan(two)
+    expect(two).toBeGreaterThan(0)
   })
 })

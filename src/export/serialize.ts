@@ -27,6 +27,7 @@ export function routeToBundle(route: Route, exportedAt: number): ExportBundleV1 
           altitude: wp.altitude,
           legSpeedMps: wp.legSpeedMps,
           dwellMs: wp.dwellMs ?? null,
+          label: wp.label ?? null,
         }),
       ),
       settings: {

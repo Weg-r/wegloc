@@ -1,13 +1,27 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import type { Route } from '../types/route'
 
+/** A cached reverse-geocode result, keyed on rounded coordinates. */
+export interface GeocodeCacheEntry {
+  key: string
+  /** The resolved place name, or '' if the provider returned nothing (cached so we don't ask again). */
+  label: string
+  at: number
+}
+
 interface WeglocDB extends DBSchema {
   routes: {
     key: string
     value: Route
     indexes: { updatedAt: number }
   }
+  geocode: {
+    key: string
+    value: GeocodeCacheEntry
+  }
 }
+
+const DB_VERSION = 2
 
 /** Why storage is not working, in words a user can act on. */
 export type StorageFailure =
@@ -63,13 +77,19 @@ function getDb(): Promise<IDBPDatabase<WeglocDB>> {
   }
 
   if (!dbPromise) {
-    dbPromise = openDB<WeglocDB>('wegloc', 1, {
+    dbPromise = openDB<WeglocDB>('wegloc', DB_VERSION, {
       upgrade(db) {
         // Additive only. Never drop a store here: it is full of routes someone
-        // spent an afternoon drawing.
+        // spent an afternoon drawing. Each store is created only if missing, so a
+        // fresh database and a v1 upgrade both land in the same place.
         if (!db.objectStoreNames.contains('routes')) {
           const store = db.createObjectStore('routes', { keyPath: 'id' })
           store.createIndex('updatedAt', 'updatedAt')
+        }
+        // v2: a reverse-geocode cache. Derived data, safe to lose; kept out of the
+        // routes store so it never risks the user's actual routes.
+        if (!db.objectStoreNames.contains('geocode')) {
+          db.createObjectStore('geocode', { keyPath: 'key' })
         }
       },
       blocked() {
@@ -125,4 +145,14 @@ export async function listRoutes(): Promise<Route[]> {
 export async function deleteRoute(id: string): Promise<void> {
   const db = await getDb()
   await db.delete('routes', id)
+}
+
+export async function getGeocodeCache(key: string): Promise<GeocodeCacheEntry | undefined> {
+  const db = await getDb()
+  return db.get('geocode', key)
+}
+
+export async function putGeocodeCache(entry: GeocodeCacheEntry): Promise<void> {
+  const db = await getDb()
+  await db.put('geocode', entry)
 }

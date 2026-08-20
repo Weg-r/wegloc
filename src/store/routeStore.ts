@@ -18,6 +18,7 @@ import {
   splitLeg,
 } from '../routes/ops'
 import type { ImportedRoute } from '../export/read'
+import { isSpeedUnit, type SpeedUnit } from '../lib/units'
 import { DEFAULT_SETTINGS, type Route, type SimulationSettings, type Waypoint } from '../types/route'
 
 /**
@@ -31,6 +32,42 @@ const HISTORY_LIMIT = 50
 
 /** Edits sharing a key inside this window are one undo step, so typing is not fifty. */
 const COALESCE_WINDOW_MS = 800
+
+const SPEED_UNIT_KEY = 'wegloc:speed-unit'
+const GEOCODE_KEY = 'wegloc:geocode-enabled'
+
+function readGeocodeEnabled(): boolean {
+  try {
+    return window.localStorage.getItem(GEOCODE_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function writeGeocodeEnabled(enabled: boolean): void {
+  try {
+    window.localStorage.setItem(GEOCODE_KEY, String(enabled))
+  } catch {
+    // Storage disabled; the preference resets next session.
+  }
+}
+
+function readSpeedUnit(): SpeedUnit {
+  try {
+    const stored = window.localStorage.getItem(SPEED_UNIT_KEY)
+    return isSpeedUnit(stored) ? stored : 'mps'
+  } catch {
+    return 'mps'
+  }
+}
+
+function writeSpeedUnit(unit: SpeedUnit): void {
+  try {
+    window.localStorage.setItem(SPEED_UNIT_KEY, unit)
+  } catch {
+    // Storage disabled; the preference just resets next session.
+  }
+}
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null
 let lastCommitKey: string | null = null
@@ -71,6 +108,10 @@ interface RouteState {
   storage: StorageState
   /** Bumped when the set of saved routes changes, so the library list knows to refetch. */
   libraryVersion: number
+  /** Display unit for speeds. A UI preference; the route model stays SI. */
+  speedUnit: SpeedUnit
+  /** Whether to reverse-geocode waypoint names. Off by default; a UI preference, never sent in a bundle. */
+  geocodeEnabled: boolean
 
   past: Route[]
   future: Route[]
@@ -104,6 +145,8 @@ interface RouteState {
   setPlaying: (playing: boolean) => void
   setPlaybackTime: (t: number) => void
   setSpeedMultiplier: (multiplier: number) => void
+  setSpeedUnit: (unit: SpeedUnit) => void
+  setGeocodeEnabled: (enabled: boolean) => void
 
   /** Persists now, cancelling any pending debounced write. Call on gesture end, not mid-drag. */
   persist: () => void
@@ -215,6 +258,8 @@ export const useRouteStore = create<RouteState>((set, get) => {
     playback: { playing: false, t: 0, speedMultiplier: 1 },
     storage: { available: isStorageAvailable(), pending: false, failure: null },
     libraryVersion: 0,
+    speedUnit: readSpeedUnit(),
+    geocodeEnabled: readGeocodeEnabled(),
     past: [],
     future: [],
 
@@ -421,6 +466,16 @@ export const useRouteStore = create<RouteState>((set, get) => {
 
     setSpeedMultiplier: (multiplier) =>
       set((state) => ({ playback: { ...state.playback, speedMultiplier: multiplier } })),
+
+    setSpeedUnit: (unit) => {
+      writeSpeedUnit(unit)
+      set({ speedUnit: unit })
+    },
+
+    setGeocodeEnabled: (enabled) => {
+      writeGeocodeEnabled(enabled)
+      set({ geocodeEnabled: enabled })
+    },
 
     persist: () => persistNow(false),
 
