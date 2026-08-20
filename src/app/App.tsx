@@ -22,7 +22,15 @@ import RouteBar from '../ui/RouteBar'
 import SummaryStrip from '../ui/SummaryStrip'
 import WaypointTools from '../ui/WaypointTools'
 import AddressSearch from '../ui/AddressSearch'
+import PanelResizer from '../ui/PanelResizer'
 import { ACCENT } from '../lib/theme'
+
+// What the settings drawer opens at, and the room each side keeps whatever the
+// drag or the window does. The list needs a couple of stations to be worth
+// looking at; the drawer needs its playback row.
+const DEFAULT_BOARD_PX = 300
+const MIN_BOARD_PX = 120
+const MIN_LIST_PX = 180
 
 export default function App() {
   useHydrateFromDb()
@@ -69,6 +77,38 @@ export default function App() {
   const [dropActive, setDropActive] = useState(false)
 
   const [follow, setFollow] = useState(true)
+
+  // How tall the settings drawer is, in pixels.
+  //
+  // It used to be however tall its own content happened to be, which left the
+  // station list — the thing above it, and the only part that grows with the
+  // route — squeezed to a single clipped row. The drawer is now given a share of
+  // the panel and the rest belongs to the list, with a bar between them to move
+  // the line.
+  const asideRef = useRef<HTMLElement>(null)
+  const [boardHeight, setBoardHeight] = useState(DEFAULT_BOARD_PX)
+
+  // Clamped against the panel as it is now, so neither side can be squeezed out
+  // of existence — by a drag, by a narrow window, or by a phone in landscape.
+  const clampBoard = useCallback((next: number) => {
+    const available = asideRef.current?.clientHeight ?? 0
+    const max = Math.max(MIN_BOARD_PX, available - MIN_LIST_PX)
+    return Math.min(Math.max(next, MIN_BOARD_PX), max)
+  }, [])
+
+  const resizeBoard = useCallback(
+    (deltaY: number) => setBoardHeight((h) => clampBoard(h - deltaY)),
+    [clampBoard],
+  )
+
+  // A window that shrinks below what the two panels were sharing has to give the
+  // list its minimum back, or the drawer eats it.
+  useEffect(() => {
+    const onResize = () => setBoardHeight((h) => clampBoard(h))
+    window.addEventListener('resize', onResize)
+    onResize()
+    return () => window.removeEventListener('resize', onResize)
+  }, [clampBoard])
 
   const track = useTrack()
   const current = useCurrentPosition(track)
@@ -225,7 +265,10 @@ export default function App() {
         )}
       </div>
 
-      <aside className="flex h-[55dvh] w-full shrink-0 flex-col border-t-4 border-neutral-900 lg:h-full lg:w-[380px] lg:border-l-4 lg:border-t-0">
+      <aside
+        ref={asideRef}
+        className="flex h-[55dvh] w-full shrink-0 flex-col overflow-hidden border-t-4 border-neutral-900 lg:h-full lg:w-[380px] lg:border-l-4 lg:border-t-0"
+      >
         <RouteBar
           routeId={route.id}
           routeName={route.name}
@@ -281,6 +324,13 @@ export default function App() {
           />
         )}
 
+        <PanelResizer
+          label="Resize the simulation settings"
+          onDrag={resizeBoard}
+          onNudge={resizeBoard}
+        />
+
+        <div className="min-h-0 shrink-0 overflow-y-auto" style={{ height: boardHeight }}>
         <DepartureBoard
           settings={route.settings}
           onUpdateSettings={updateSettings}
@@ -312,6 +362,7 @@ export default function App() {
           routingStatus={routingStatus}
           travelMode={travelMode}
         />
+        </div>
       </aside>
     </div>
   )
